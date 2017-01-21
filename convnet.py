@@ -1,57 +1,88 @@
 import numpy as np
 
 def ReLU(input_array):
+    # rectified linear unit activation function
     return np.maximum(input_array, 0)
 
-def CE_loss(labels, outputs):
-    # cross entropy loss
-    loss = 0
-    for i in range(len(labels)):
-        loss += math.log(outputs[i, labels[i]])
-    return loss
+def sigmoid(input_array):
+    # sigmoid activation function
+    return 1. / (1 + np.exp(-input_array))
+
+def CE_loss(labels_x, output_x):
+    # cross entropy loss (multinomial regression)
+    return -np.sum(labels_x * np.log(output_x))
+
+def square_loss(labels_x, output_x):
+    # square loss
+    return 1. / 2 np.sum((labels_x - output_x) ** 2)
 
 
 class fclayer:
 
     def __init__(self, input_size, output_size, activation_type):
-        # self.n = n
-        self.W = np.random.randn(output_size, input_size)
+        self.W = np.random.randn(output_size, input_size) * 0.01 # as in the AlexNet paper
+        self.activation_type = activation_type
 
         # so far only ReLU is implemented
-        if activation_type == "ReLU":
-            self.activation = ReLU
-        else:
-            print("error: unknown activation type")
-            self.activation = (lambda x: x)
 
     def forwardprop(self, X):
         out = W.dot(X)
-        return self.activation(out)
 
-    def backprop(self, grad, X):
-        dW = dD.dot(X.T)
-        dX = W.T.dot(dD)
-        return smth
+        if self.activation_type == "ReLU":
+            out = ReLU(out)
+        elif self.activation_type == "None":
+            out = out # no activation
+        else:
+            print("error: unknown activation type")
+            out = out
+        return out
+
+    def backprop(self, error, cur_out, prev_out):
+        dW = error.dot(prev_out.T) # this should be an array with shape (output_size, input_size)
+        if self.activation_type == "ReLU":
+            dW[cur_out < 0] = 0
+
+        dA = self.W.T.dot(error) # this should be a vector with length input_size
+        if self.activation_type == "ReLU":
+            dA[cur_out < 0] = 0
+
+        # dW = dD.dot(X.T)
+        # dX = W.T.dot(dD)
+        return dW, dA
+
+    def update(self, update_size):
+        self.W += update_size
 
 class convlayer:
+    # TODO
 
-    def __init__(self, nb_filters, stride, activation):
-        self.n = n
+    def __init__(self, nb_filters, stride, activation_type):
+        # self.n = n
 
     def forwardprop(self):
 
     def backprop(self):
 
 class poollayer:
+    # TODO
 
     def __init__(self):
+
+    def forwardprop(self):
+
+    def backprop(self):
 
 class softmaxlayer:
 
     def __init__(self):
 
+    def forwardprop(self, X):
+        return np.exp(X) / np.exp(X).sum()
 
-class convnet:
+    def backprop(self, smth):
+        # TODO ?
+
+class ConvNet:
 
     def __init__(self):
         self.layers = []
@@ -71,14 +102,59 @@ class convnet:
             print("error: unknown layer type")
 
     def forward_pass(self, X):
+        # return the input data X and outputs of every layer
         cur_input = X
+        outputs = []
+        outputs.append(cur_input)
         for layer in self.layers:
             cur_input = layer.forwardprop(cur_input)
-        return cur_input
+            outputs.append(cur_input)
+        return outputs
 
-    def fit(self, dataset, step_size):
+    def backward_pass(self, X):
+        # TODO
 
-    def predict(self):
+    def get_minibatch_grads(self, X_minibatch, Y_minibatch):
+        # TODO
+
+    def fit(self, X_train, Y_train, step_size, minibatch_size, n_iter):
+        # do fixed number of iterations
+        for iter in range(n_iter):
+            print("Iteration %d" % iter)
+            X_train, Y_train = shuffle(X_train, Y_train)
+
+            # do in minibatch fashion
+            for i in range(0, X_train.shape[0], minibatch_size):
+                X_minibatch = X_train[i:i + minibatch_size]
+                Y_minibatch = Y_train[i:i + minibatch_size]
+
+                grads = get_grads(X_minibatch, Y_minibatch) # implement with the backward_pass
+
+                # do gradient step for every layer
+                # so far the step size is fixed, smth like RMSprop should be used ideally
+                for i in range(self.nb_layers):
+                    self.layers[i].update(step_size * grads[i])
+
+    def predict(self, X_test):
+        # smth like this, check
+        Y_test = []
+        for X in X_test:
+            prediction = np.argmax(self.forward_pass(X)[-1])
+            Y_test.append(prediction)
+        return Y_test
+
+if __name__ == "__main__"
+    cnn = ConvNet()
+    # ConvNet.add_layer([])
+
+
+
+
+
+
+
+
+
 
 
 
