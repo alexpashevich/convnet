@@ -1,29 +1,31 @@
 import numpy as np
+from sklearn.datasets import load_iris
 
 def ReLU(input_array):
     # rectified linear unit activation function
     return np.maximum(input_array, 0)
 
-def sigmoid(input_array):
-    # sigmoid activation function
-    return 1. / (1 + np.exp(-input_array))
-
 def CE_loss(labels_x, output_x):
     # cross entropy loss (multinomial regression)
     return -np.sum(labels_x * np.log(output_x))
 
-def square_loss(labels_x, output_x):
+def sigmoid(input_array): # not used now
+    # sigmoid activation function
+    return 1. / (1 + np.exp(-input_array))
+
+def square_loss(labels_x, output_x): # not used now
     # square loss
-    return 1. / 2 np.sum((labels_x - output_x) ** 2)
+    return 1. / 2 * np.sum((labels_x - output_x) ** 2)
 
 
 class fclayer:
 
-    def __init__(self, input_size, output_size, activation_type):
+    def __init__(self, layer_info): #input_size, output_size, activation_type):
+        input_size = layer_info["layer_info"]
+        output_size = layer_info["output_size"]
+        activation_type = layer_info["activation_type"]
         self.W = np.random.randn(output_size, input_size) * 0.01 # as in the AlexNet paper
-        self.activation_type = activation_type
-
-        # so far only ReLU is implemented
+        self.activation_type = activation_type # so far only ReLU is implemented
 
     def forwardprop(self, X):
         out = W.dot(X)
@@ -53,34 +55,34 @@ class fclayer:
     def update(self, update_size):
         self.W += update_size
 
-class convlayer:
-    # TODO
+# class convlayer:
+#     # TODO
 
-    def __init__(self, nb_filters, stride, activation_type):
-        # self.n = n
+#     def __init__(self, nb_filters, stride, activation_type):
+#         # self.n = n
 
-    def forwardprop(self):
+#     def forwardprop(self):
 
-    def backprop(self):
+#     def backprop(self):
 
-class poollayer:
-    # TODO
+# class poollayer:
+#     # TODO
 
-    def __init__(self):
+#     def __init__(self):
 
-    def forwardprop(self):
+#     def forwardprop(self):
 
-    def backprop(self):
+#     def backprop(self):
 
-class softmaxlayer:
+# class softmaxlayer:
 
-    def __init__(self):
+#     def __init__(self):
 
-    def forwardprop(self, X):
-        return np.exp(X) / np.exp(X).sum()
+#     def forwardprop(self, X):
+#         return np.exp(X) / np.exp(X).sum()
 
-    def backprop(self, smth):
-        # TODO ?
+#     def backprop(self, smth):
+#         # TODO ?
 
 class ConvNet:
 
@@ -88,14 +90,14 @@ class ConvNet:
         self.layers = []
         self.nb_layers = 0
 
-    def add_layer(self, layer_info):
-        if type == "fclayer":
+    def add_layer(self, layer_type, layer_info):
+        if layer_type == "fclayer":
             layers.append(fclayer(layer_info))
             self.nb_layers += 1
-        elif type == "convlayer":
+        elif layer_type == "convlayer":
             layers.append(convlayer(layer_info))
             self.nb_layers += 1
-        elif if type == "poollayer":
+        elif layer_type == "poollayer":
             layers.append(poollayer(layer_info))
             self.nb_layers += 1
         else:
@@ -113,9 +115,11 @@ class ConvNet:
 
     def backward_pass(self, X):
         # TODO
+        a = 5
 
     def get_minibatch_grads(self, X_minibatch, Y_minibatch):
         # TODO
+        a = 5
 
     def fit(self, X_train, Y_train, step_size, minibatch_size, n_iter):
         # do fixed number of iterations
@@ -143,9 +147,20 @@ class ConvNet:
             Y_test.append(prediction)
         return Y_test
 
-if __name__ == "__main__"
-    cnn = ConvNet()
-    # ConvNet.add_layer([])
+if __name__ == "__main__":
+    iris = load_iris()
+    X, Y = iris.data, iris.target
+
+    print(X.shape)
+    print(Y.shape)
+
+    size1 = X.shape[0]
+    size4 = Y.shape[0]
+
+    # cnn = ConvNet()
+    # ConvNet.add_layer("fclayer", {"input_size": size1, "output_size": size2, "activation_type": ReLU})
+    # ConvNet.add_layer("fclayer", {"input_size": size2, "output_size": size3, "activation_type": ReLU})
+    # ConvNet.add_layer("fclayer", {"input_size": size3, "output_size": size4, "activation_type": ReLU})
 
 
 
