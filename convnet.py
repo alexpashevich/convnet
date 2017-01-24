@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.utils import shuffle
 from sklearn.datasets import load_iris
 
 def ReLU(input_array):
@@ -20,15 +21,22 @@ def square_loss(labels_x, output_x): # not used now
 
 class fclayer:
 
-    def __init__(self, layer_info): #input_size, output_size, activation_type):
-        input_size = layer_info["layer_info"]
+    def __init__(self, layer_info):
+        input_size = layer_info["input_size"]
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
         self.W = np.random.randn(output_size, input_size) * 0.01 # as in the AlexNet paper
+        self.b = np.random.randn(output_size) * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
+    def get_W_shape(self):
+        return W.shape
+
+    def get_b_shape(self):
+        return b.shape
+
     def forwardprop(self, X):
-        out = W.dot(X)
+        out = self.W.dot(X) + self.b
 
         if self.activation_type == "ReLU":
             out = ReLU(out)
@@ -44,16 +52,24 @@ class fclayer:
         if self.activation_type == "ReLU":
             dW[cur_out < 0] = 0
 
+        db = error
+        if self.activation_type == "ReLU":
+            db[cur_out < 0] = 0
+
         dA = self.W.T.dot(error) # this should be a vector with length input_size
         if self.activation_type == "ReLU":
             dA[cur_out < 0] = 0
 
+        # in the example it was
         # dW = dD.dot(X.T)
         # dX = W.T.dot(dD)
-        return dW, dA
 
-    def update(self, update_size):
+        return dW, db, dA
+
+    def update(self, update_W, update_b):
         self.W += update_size
+        self.b += update_b
+
 
 # class convlayer:
 #     # TODO
@@ -74,16 +90,6 @@ class fclayer:
 
 #     def backprop(self):
 
-# class softmaxlayer:
-
-#     def __init__(self):
-
-#     def forwardprop(self, X):
-#         return np.exp(X) / np.exp(X).sum()
-
-#     def backprop(self, smth):
-#         # TODO ?
-
 class ConvNet:
 
     def __init__(self):
@@ -92,13 +98,13 @@ class ConvNet:
 
     def add_layer(self, layer_type, layer_info):
         if layer_type == "fclayer":
-            layers.append(fclayer(layer_info))
+            self.layers.append(fclayer(layer_info))
             self.nb_layers += 1
         elif layer_type == "convlayer":
-            layers.append(convlayer(layer_info))
+            self.layers.append(convlayer(layer_info))
             self.nb_layers += 1
         elif layer_type == "poollayer":
-            layers.append(poollayer(layer_info))
+            self.layers.append(poollayer(layer_info))
             self.nb_layers += 1
         else:
             print("error: unknown layer type")
@@ -111,33 +117,81 @@ class ConvNet:
         for layer in self.layers:
             cur_input = layer.forwardprop(cur_input)
             outputs.append(cur_input)
+
+        # the softmax layer
+        cur_input = np.exp(cur_input) / np.exp(cur_input).sum()
+        outputs.append(cur_input)
+
         return outputs
 
-    def backward_pass(self, X):
-        # TODO
-        a = 5
+    def backward_pass(self, labels, outputs):
+        # do the backward pass and return grads for W update
+        i = 1
+        grad_W = []
+        grad_b = []
+        errors = outputs[-1] - labels # we expect CE loss and softmax in the end
+        for layer in self.layers:
+            (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i]) # we skip the last output
+            grad_W.append(dW)
+            grad_b.append(db)
+            i += 1
 
-    def get_minibatch_grads(self, X_minibatch, Y_minibatch):
-        # TODO
-        a = 5
+        return reversed(grad_W), reversed(grad_b) # we return reversed so they come in the "feedforward" order
 
-    def fit(self, X_train, Y_train, step_size, minibatch_size, n_iter):
+    def get_minibatch_grads(self, X, Y):
+        # return averaged gards over the minibatch
+        list_grads_W = []
+        list_grads_b = []
+        loss = 0
+        minibatch_size = X.shape[0]
+        for i in range(minibatch_size):
+            outputs = self.forward_pass(X[i,:])
+            grad_W, grad_b = self.backward_pass(Y[i,:], outputs)
+            list_grads_W.append(grad_W)
+            list_grads_b.append(grad_b)
+            loss += CE_loss(Y[i,:], outputs[-1])
+
+        grads_W = []
+        grads_b = []
+        for i in range(self.nb_layers):
+            grads_W.append(np.zeros(self.layers[i].get_W_shape()))
+            grads_b.append(np.zeros(self.layers[i].get_b_shape()))
+            for j in range(minibatch_size):
+                grads_W[i] += list_grads_W[i][j]
+                grads_b[i] += list_grads_b[i][j]
+            grads_W[i] /= minibatch_size
+            grads_b[i] /= minibatch_size
+
+        return grads_W, grads_b, loss
+
+
+    def fit(self, X_train, Y_train, K, step_size, minibatch_size, n_iter):
+        # train the network and adjust the weights during n iterations
+
+        # do the label preprocessing first
+        Y_train_vector = np.zeros((Y_train.shape[0], K))
+        for i in range(Y_train.shape[0]):
+            Y_train_vector[i, Y_train[i]] = 1
+
         # do fixed number of iterations
         for iter in range(n_iter):
             print("Iteration %d" % iter)
-            X_train, Y_train = shuffle(X_train, Y_train)
+            X_train, Y_train_vector = shuffle(X_train, Y_train_vector)
+            loss = 0
 
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
-                X_minibatch = X_train[i:i + minibatch_size]
-                Y_minibatch = Y_train[i:i + minibatch_size]
+                X_minibatch = X_train[i:i + minibatch_size] # TODO: check if it is okey when X_size % minibatch_size != 0
+                Y_minibatch = Y_train_vector[i:i + minibatch_size]
 
-                grads = get_grads(X_minibatch, Y_minibatch) # implement with the backward_pass
-
+                (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, Y_minibatch) # implement with the backward_pass
+                loss += minibatch_loss
                 # do gradient step for every layer
                 # so far the step size is fixed, smth like RMSprop should be used ideally
                 for i in range(self.nb_layers):
-                    self.layers[i].update(step_size * grads[i])
+                    self.layers[i].update(step_size * grads_W[i], step_size * grads_b[i])
+
+            print("Loss = %f" % loss)
 
     def predict(self, X_test):
         # smth like this, check
@@ -150,17 +204,19 @@ class ConvNet:
 if __name__ == "__main__":
     iris = load_iris()
     X, Y = iris.data, iris.target
+    K = 3
 
-    print(X.shape)
-    print(Y.shape)
+    size1 = X.shape[1]
+    size2 = 5
+    size3 = 4
+    size4 = K
 
-    size1 = X.shape[0]
-    size4 = Y.shape[0]
+    cnn = ConvNet()
+    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
 
-    # cnn = ConvNet()
-    # ConvNet.add_layer("fclayer", {"input_size": size1, "output_size": size2, "activation_type": ReLU})
-    # ConvNet.add_layer("fclayer", {"input_size": size2, "output_size": size3, "activation_type": ReLU})
-    # ConvNet.add_layer("fclayer", {"input_size": size3, "output_size": size4, "activation_type": ReLU})
+    cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 50)
 
 
 
