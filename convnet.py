@@ -9,17 +9,17 @@ def ReLU(input_array):
     # rectified linear unit activation function
     return np.maximum(input_array, 0)
 
-def CE_loss(labels_x, output_x):
+def CE_loss(y_true, y_pred):
     # cross entropy loss (multinomial regression)
-    return -np.sum(labels_x * np.log(output_x))
+    return -np.sum(y_true * np.log(y_pred))
 
 def sigmoid(input_array): # not used now
     # sigmoid activation function
     return 1. / (1 + np.exp(-input_array))
 
-def square_loss(labels_x, output_x): # not used now
+def square_loss(y_true, y_pred): # not used now
     # square loss
-    return 1. / 2 * np.sum((labels_x - output_x) ** 2)
+    return 1. / 2 * np.sum((y_true - y_pred) ** 2)
 
 
 class fclayer:
@@ -29,6 +29,7 @@ class fclayer:
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
         self.W = np.random.randn(output_size, input_size) # * 0.01 # as in the AlexNet paper
+        print(self.W)
         self.b = np.random.randn(output_size) # * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
@@ -134,12 +135,12 @@ class ConvNet:
 
         return outputs
 
-    def backward_pass(self, labels, outputs):
+    def backward_pass(self, y_true, outputs):
         # do the backward pass and return grads for W update
         i = 1
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
-        errors = outputs[-1] - labels # we expect CE loss and softmax in the end
+        errors = outputs[-1] - y_true # we expect CE loss and softmax in the end
         for layer in reversed(self.layers):
             # we skip the last output as it contains the final classification output
             (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i])
@@ -233,15 +234,17 @@ if __name__ == "__main__":
     X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
 
-    # run_nn(X_train, X_test, Y_train, Y_test)
-    size1 = 2
-    size2 = 100
-    size3 = 2
+    run_nn(X_train, X_test, Y_train, Y_test)
+    # np.random.seed(228)
 
-    cnn = ConvNet()
-    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
+    # size1 = 2
+    # size2 = 100
+    # size3 = 2
+
+    # cnn = ConvNet()
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    # cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
 
 
 
