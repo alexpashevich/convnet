@@ -370,41 +370,6 @@ if __name__ == "__main__":
 #    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
 
 
-
-
-
-
-
-
-
-
-
-
-#            # now we transform our data according to the indexes and get a vector instead of a tensor
-#            # not sure about it yet though [indexes and stuff]
-#            x_padded = np.zeros((N, in_channels, (in_heigth + 2 * padding), (in_width + 2 * padding)), dtype=cols.dtype)
-#            cols = x_padded[:, k, i, j]
-#            cols = cols.transpose(1, 2, 0).reshape(self.height * self.width * self.in_channels, -1)
-#
-#            # Do quick computations (with cool matrix multiplication)
-#            
-#            filter_col = self.filter.reshape(out_channels, -1)
-#            out = filter_col @ X_col + b
-#            out = out.reshape(out_channels, h_out, w_out, n_x)
-#            out = out.transpose(3, 0, 1, 2)
-#
-#            # now we return  our vectors back to normal life
-#
-#            cols_reshaped = cols.reshape(C * field_height * field_width, -1, N)
-#            cols_reshaped = cols_reshaped.transpose(2, 0, 1) # not really sure about indexes here
-#            np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
-#            if padding == 0:
-#                x_original = x_padded
-#            else:
-#                x_original = x_padded[:, :, padding:-padding, padding:-padding]
-
-
-
     # iris = load_iris()
     # X, Y = iris.data, iris.target
     # K = 3
