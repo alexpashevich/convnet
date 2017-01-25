@@ -1,6 +1,9 @@
 import numpy as np
 from sklearn.utils import shuffle
-from sklearn.datasets import load_iris
+from sklearn.datasets import load_iris, make_moons
+from sklearn.cross_validation import train_test_split
+
+from yann import run_nn
 
 def ReLU(input_array):
     # rectified linear unit activation function
@@ -25,18 +28,23 @@ class fclayer:
         input_size = layer_info["input_size"]
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
-        self.W = np.random.randn(output_size, input_size) * 0.01 # as in the AlexNet paper
-        self.b = np.random.randn(output_size) * 0.01
+        self.W = np.random.randn(output_size, input_size) # * 0.01 # as in the AlexNet paper
+        self.b = np.random.randn(output_size) # * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
     def get_W_shape(self):
-        return W.shape
+        return self.W.shape
 
     def get_b_shape(self):
-        return b.shape
+        return self.b.shape
 
     def forwardprop(self, X):
+        # print("W_shape = ", self.W.shape)
+        # print("b_shape = ", self.b.shape)
+        # print("X_shape = ", X.shape)
         out = self.W.dot(X) + self.b
+
+        # print("out_shape = ", out.shape)
 
         if self.activation_type == "ReLU":
             out = ReLU(out)
@@ -48,11 +56,13 @@ class fclayer:
         return out
 
     def backprop(self, error, cur_out, prev_out):
-        dW = error.dot(prev_out.T) # this should be an array with shape (output_size, input_size)
+        # dW = error.dot(prev_out.T) # this should be an array with shape (output_size, input_size)
+        dW = np.outer(error, prev_out)
         if self.activation_type == "ReLU":
             dW[cur_out < 0] = 0
 
         db = error
+        # print("db_shape = ", db.shape)
         if self.activation_type == "ReLU":
             db[cur_out < 0] = 0
 
@@ -67,7 +77,7 @@ class fclayer:
         return dW, db, dA
 
     def update(self, update_W, update_b):
-        self.W += update_size
+        self.W += update_W
         self.b += update_b
 
 
@@ -127,16 +137,17 @@ class ConvNet:
     def backward_pass(self, labels, outputs):
         # do the backward pass and return grads for W update
         i = 1
-        grad_W = []
-        grad_b = []
+        grad_W = len(self.layers) * [None]
+        grad_b = len(self.layers) * [None]
         errors = outputs[-1] - labels # we expect CE loss and softmax in the end
-        for layer in self.layers:
-            (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i]) # we skip the last output
-            grad_W.append(dW)
-            grad_b.append(db)
+        for layer in reversed(self.layers):
+            # we skip the last output as it contains the final classification output
+            (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i])
+            grad_W[-i] = dW # we use the returned order here in order to obtain the normal order in the end
+            grad_b[-i] = db # the same here
             i += 1
 
-        return reversed(grad_W), reversed(grad_b) # we return reversed so they come in the "feedforward" order
+        return grad_W, grad_b
 
     def get_minibatch_grads(self, X, Y):
         # return averaged gards over the minibatch
@@ -157,8 +168,8 @@ class ConvNet:
             grads_W.append(np.zeros(self.layers[i].get_W_shape()))
             grads_b.append(np.zeros(self.layers[i].get_b_shape()))
             for j in range(minibatch_size):
-                grads_W[i] += list_grads_W[i][j]
-                grads_b[i] += list_grads_b[i][j]
+                grads_W[i] += list_grads_W[j][i]
+                grads_b[i] += list_grads_b[j][i]
             grads_W[i] /= minibatch_size
             grads_b[i] /= minibatch_size
 
@@ -189,12 +200,12 @@ class ConvNet:
                 # do gradient step for every layer
                 # so far the step size is fixed, smth like RMSprop should be used ideally
                 for i in range(self.nb_layers):
-                    self.layers[i].update(step_size * grads_W[i], step_size * grads_b[i])
+                    self.layers[i].update(-step_size * grads_W[i], -step_size * grads_b[i])
 
-            print("Loss = %f" % loss)
+            print("Loss = %f" % (loss / X_train.shape[0]))
 
     def predict(self, X_test):
-        # smth like this, check
+        # TODO: smth like this, check
         Y_test = []
         for X in X_test:
             prediction = np.argmax(self.forward_pass(X)[-1])
@@ -202,21 +213,35 @@ class ConvNet:
         return Y_test
 
 if __name__ == "__main__":
-    iris = load_iris()
-    X, Y = iris.data, iris.target
-    K = 3
+    # iris = load_iris()
+    # X, Y = iris.data, iris.target
+    # K = 3
 
-    size1 = X.shape[1]
-    size2 = 5
-    size3 = 4
-    size4 = K
+    # size1 = X.shape[1]
+    # size2 = 50
+    # size3 = 40
+    # size4 = K
+
+    # cnn = ConvNet()
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
+
+    # cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 500)
+
+
+    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
+
+    # run_nn(X_train, X_test, Y_train, Y_test)
+    size1 = 2
+    size2 = 100
+    size3 = 2
 
     cnn = ConvNet()
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
-
-    cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 50)
+    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
 
 
 
