@@ -2,11 +2,10 @@ import numpy as np
 import pickle
 from pathlib import Path
 from sklearn.utils import shuffle
-from sklearn.datasets import load_iris, make_moons
-from sklearn.cross_validation import train_test_split
+# from sklearn.datasets import load_iris, make_moons
 from timeit import default_timer as timer
 import matplotlib.pyplot as plt
-
+ 
 #from yann import run_nn
 
 def ReLU(input_array):
@@ -84,88 +83,89 @@ class fclayer:
         self.W += update_W
         self.b += update_b
 
+"""
+im2col trick
+Courtesy of :
+    https://github.com/wiseodd/hipsternet/blob/f4b46e0a7856e45553955893b266df60bae8083c/hipsternet/im2col.py
+"""
+def get_im2col_indices(in_channels, height, width, out_height, out_width, stride):
+    i0 = np.repeat(np.arange(height), width) 
+    i0 = np.tile(i0, in_channels)
+    i1 = stride * np.repeat(np.arange(out_height), out_width)
+    j0 = np.tile(np.arange(width), height * in_channels)
+    j1 = stride * np.tile(np.arange(out_width), out_height)
+    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+    k = np.repeat(np.arange(in_channels), height * width).reshape(-1, 1)
+    k = k.astype(int)
+    i = i.astype(int)
+    j = j.astype(int)
+    return k, i, j
 
 class ConvLayer(object):
     def __init__(self, W, b, stride=1, padding=0):   
         """
-        W - [height, width, in_channels, out_channels]
+        W - [out_channels, in_channels, height, width]
         """
         self.W = W
         self.b = b
-        self.height, self.width, self.in_channels, self.out_channels = W.shape
+        self.out_channels, self.in_channels, self.height, self.width = W.shape
         self.stride = stride
         self.padding = padding
 
-        
-    def forwardprop(self, X):
-        in_height, in_width, in_channels = X.shape
-        out_height, out_width = self.get_output_dims(X)
 
-        V = np.zeros([out_height, out_width, self.out_channels])
-        s = self.stride
-
-        # Slow thing
+    def slow_fprop(self, X, out_height, out_width):
         time = timer()
-        for i in range(0, out_height):
-            for j in range(0, out_width):
-                for k in range(0, self.out_channels):
-                    V[i,j,k] = np.sum(
-                            X[
-                                (i*s):(i*s+self.height), 
-                                (j*s):(j*s+self.width), :
-                                ]*self.W[:, :, :, k] + self.b[k]
-                            )
+        batch_size = X.shape[0]
+        V = np.zeros([batch_size, self.out_channels, out_height, out_width])
+        s = self.stride
+        for b in range(0, batch_size):
+            for k in range(0, self.out_channels):
+                for i in range(0, out_height):
+                    for j in range(0, out_width):
+                        V[b, k, i, j] = np.add(
+                                np.sum(np.multiply(
+                                        X[b, :, (i*s):(i*s+self.height), (j*s):(j*s+self.width)],
+                                        self.W[k, :, :, :]
+                                        )), 
+                                self.b[k]
+                                )
         print('Slow thing computed in {:6f}'.format(timer() - time))
+        return V
 
-        try_fast = False 
+    def fast_fprop(self, X, out_height, out_width):
+        time = timer()
+        batch_size = X.shape[0]
+        in_channels = X.shape[1]
+        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
+        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
+        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
 
-        if (try_fast):
+        W_col = self.W.reshape(self.out_channels, -1)
 
-            ########################################################
-            ######  Well, this should work fast, but later      ####
-            ########################################################
-            
-            # Will do a separate procedure, it's too long
-            # First of all we introduce super fancy indixes
+        V = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
+        V = V.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
+        print('Fast thing computed in {:6f}'.format(timer() - time))
+        return V
 
-            i0 = np.repeat(np.arange(self.height), self.width) 
-            i0 = np.tile(i0, self.in_channels)
-            i1 = self.stride * np.repeat(np.arange(out_height), out_width)
-            j0 = np.tile(np.arange(self.width), self.height * self.in_channels)
-            j1 = self.stride * np.tile(np.arange(out_width), out_height)
-            i = i0.reshape(-1, 1) + i1.reshape(1, -1)
-            j = j0.reshape(-1, 1) + j1.reshape(1, -1)
-            k = np.repeat(np.arange(self.in_channels), self.height * self.width).reshape(-1, 1)
-            k = k.astype(int)
-            i = i.astype(int)
-            j = j.astype(int)
-            
-#            # now we transform our data according to the indexes and get a vector instead of a tensor
-#            # not sure about it yet though [indexes and stuff]
-#            x_padded = np.zeros((N, in_channels, (in_heigth + 2 * padding), (in_width + 2 * padding)), dtype=cols.dtype)
-#            cols = x_padded[:, k, i, j]
-#            cols = cols.transpose(1, 2, 0).reshape(self.height * self.width * self.in_channels, -1)
-#
-#            # Do quick computations (with cool matrix multiplication)
-#            
-#            filter_col = self.filter.reshape(out_channels, -1)
-#            out = filter_col @ X_col + b
-#            out = out.reshape(out_channels, h_out, w_out, n_x)
-#            out = out.transpose(3, 0, 1, 2)
-#
-#            # now we return  our vectors back to normal life
-#
-#            cols_reshaped = cols.reshape(C * field_height * field_width, -1, N)
-#            cols_reshaped = cols_reshaped.transpose(2, 0, 1) # not really sure about indexes here
-#            np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
-#            if padding == 0:
-#                x_original = x_padded
-#            else:
-#                x_original = x_padded[:, :, padding:-padding, padding:-padding]
-#
+        
 
-        #import pudb; pudb.set_trace()  # XXX BREAKPOINT
-        #pass
+    def forwardprop(self, X, slow=False):
+        """
+        X - [batch_size, in_channels, in_height, in_width]
+        """
+        batch_size, in_channels, in_height, in_width = X.shape
+        out_height, out_width = self.get_output_dims(X)
+        
+        p = self.padding
+        if p == 0:
+            Xp = X
+        else:
+            Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
+        
+        Vs = self.slow_fprop(Xp, out_height, out_width)
+        Vf = self.fast_fprop(Xp, out_height, out_width)
+        print(np.mean(Vs-Vf))
         
 #        if self.activation_type == "ReLU":
 #            out = ReLU(V)
@@ -174,11 +174,11 @@ class ConvLayer(object):
 #        else:
 #            print("error: unknown activation type")
 #            out = out
-        return ReLU(V)
+        # return ReLU(V)
 
 
     def get_output_dims(self, X):
-        in_height, in_width, in_channels = X.shape
+        batch_size, in_channels, in_height, in_width = X.shape
 
         assert in_channels == self.in_channels
         assert (in_height - self.height + 2*self.padding) % self.stride == 0
@@ -313,7 +313,98 @@ class ConvNet:
             Y_test.append(prediction)
         return Y_test
 
+        
+def get_data_fast(name):
+    #some problems with training labels, fix later
+    data_csv_path = Path('.').resolve().parent/"Data"/(name + ".csv")
+    data_pkl_path = data_csv_path.parent/(name+".pkl")
+    f = None
+    try:
+        with data_pkl_path.open('rb') as f:
+            data = pickle.load(f)
+    except (OSError, IOError) as e:
+        f = str(data_csv_path)
+        data = np.genfromtxt(fname = str(data_csv_path), delimiter = ",")
+        with data_csv_path.open('wb') as f:
+            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+    #data = data[:,:-1]
+    return data
+
+def vis_img(x):
+    """ Take image of dims [channels, h, w], show"""
+    img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    plt.imshow(img)
+    
+
+def main():
+    # Playing with data
+    xtr = get_data_fast("Xtr")[:,:-1]
+    # xte = get_data_fast("Xte")[:,:,-1]
+    # ytr = get_data_fast("Ytr")
+    # Traspose img to [batch_size, channels, im_height, im_width]
+    # Building net
+    xtr = xtr.reshape(-1, 3, 32, 32)
+    W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
+    b1 = np.ones([12]) * 0.1
+    cv1 = ConvLayer(W1, b1)
+    # Doing forward pass
+    V = cv1.forwardprop(xtr[:3, :, :, :]) # just to make sure I didn't mess up indices and all
+    # plt.imshow(V[:, :, 3])
+
 if __name__ == "__main__":
+    main()
+    #####################################################
+
+
+#    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
+#    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
+#
+#    # run_nn(X_train, X_test, Y_train, Y_test)
+#    size1 = 2
+#    size2 = 100
+#    size3 = 2
+#
+#    cnn = ConvNet()
+#    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+#    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+#    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
+
+
+
+
+
+
+
+
+
+
+
+
+#            # now we transform our data according to the indexes and get a vector instead of a tensor
+#            # not sure about it yet though [indexes and stuff]
+#            x_padded = np.zeros((N, in_channels, (in_heigth + 2 * padding), (in_width + 2 * padding)), dtype=cols.dtype)
+#            cols = x_padded[:, k, i, j]
+#            cols = cols.transpose(1, 2, 0).reshape(self.height * self.width * self.in_channels, -1)
+#
+#            # Do quick computations (with cool matrix multiplication)
+#            
+#            filter_col = self.filter.reshape(out_channels, -1)
+#            out = filter_col @ X_col + b
+#            out = out.reshape(out_channels, h_out, w_out, n_x)
+#            out = out.transpose(3, 0, 1, 2)
+#
+#            # now we return  our vectors back to normal life
+#
+#            cols_reshaped = cols.reshape(C * field_height * field_width, -1, N)
+#            cols_reshaped = cols_reshaped.transpose(2, 0, 1) # not really sure about indexes here
+#            np.add.at(x_padded, (slice(None), k, i, j), cols_reshaped)
+#            if padding == 0:
+#                x_original = x_padded
+#            else:
+#                x_original = x_padded[:, :, padding:-padding, padding:-padding]
+
+
+
     # iris = load_iris()
     # X, Y = iris.data, iris.target
     # K = 3
@@ -329,60 +420,3 @@ if __name__ == "__main__":
     # cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
 
     # cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 500)
-    
-    #############################################
-    # Real data, comment/uncomment if necessary
-    #############################################
-    
-    #xtr_csv = np.genfromtxt(fname = str(xtr_csv_path), delimiter = ",")
-    
-    #with xtr_pkl_path.open('wb') as f:
-    #   pickle.dump(xtr_csv, f, pickle.HIGHEST_PROTOCOL)
-     
-     # Should be a separate procedure later
-    xtr_csv_path = Path('.').resolve().parent/"Data"/"Xtr.csv"
-    xtr_pkl_path = xtr_csv_path.parent/'Xtr.pkl'
-    try:
-        with xtr_pkl_path.open('rb') as f:
-            xtr = pickle.load(f)
-    except (OSError, IOError) as e:
-        xtr_csv = np.genfromtxt(fname = str(xtr_csv_path), delimiter = ",")
-        pickle.dump(xtr_csv, f, pickle.HIGHEST_PROTOCOL)
- 
-    xtr = xtr[:,:-1]
-    img = xtr[49].reshape(3, 32, 32).transpose(1, 2, 0)# + [0.25, 0.2, 0.2]
-    cnn = ConvNet()
-    # Building net
-    W1 = np.random.normal(0, 1, (5, 5, 3, 12)) # random weights, 12 filters
-    b1 = np.ones([12]) * 0.1
-    cv1 = ConvLayer(W1, b1)
-    # Doing forward pass
-    V = cv1.forwardprop(img) # just to make sure I didn't mess up indices and all
-    plt.imshow(V[:, :, 3])
-    #####################################################
-
-
-    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
-
-    # run_nn(X_train, X_test, Y_train, Y_test)
-    size1 = 2
-    size2 = 100
-    size3 = 2
-
-    cnn = ConvNet()
-    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
-
-
-
-
-
-
-
-
-
-
-
-
