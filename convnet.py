@@ -1,9 +1,12 @@
 import numpy as np
+import pickle
+from pathlib import Path
 from sklearn.utils import shuffle
-from sklearn.datasets import load_iris, make_moons
-from sklearn.cross_validation import train_test_split
+from sklearn.datasets import make_moons
+from sklearn.model_selection import train_test_split
+from timeit import default_timer as timer
+import matplotlib.pyplot as plt
 
-from yann import run_nn
 
 def ReLU(input_array):
     # rectified linear unit activation function
@@ -29,7 +32,6 @@ class fclayer:
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
         self.W = np.random.randn(input_size, output_size) # * 0.01 # as in the AlexNet paper
-        # print(self.W)
         self.b = np.random.randn(output_size) # * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
@@ -65,16 +67,114 @@ class fclayer:
         self.W -= update_W
         self.b -= update_b
 
+"""
+im2col trick
+Courtesy of :
+    https://github.com/wiseodd/hipsternet/blob/f4b46e0a7856e45553955893b266df60bae8083c/hipsternet/im2col.py
+"""
+def get_im2col_indices(in_channels, height, width, out_height, out_width, stride):
+    i0 = np.repeat(np.arange(height), width) 
+    i0 = np.tile(i0, in_channels)
+    i1 = stride * np.repeat(np.arange(out_height), out_width)
+    j0 = np.tile(np.arange(width), height * in_channels)
+    j1 = stride * np.tile(np.arange(out_width), out_height)
+    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+    k = np.repeat(np.arange(in_channels), height * width).reshape(-1, 1)
+    k = k.astype(int)
+    i = i.astype(int)
+    j = j.astype(int)
+    return k, i, j
 
-# class convlayer:
-#     # TODO
+class ConvLayer(object):
+    def __init__(self, W, b, stride=1, padding=0):   
+        """
+        W - [out_channels, in_channels, height, width]
+        """
+        self.W = W
+        self.b = b
+        self.out_channels, self.in_channels, self.height, self.width = W.shape
+        self.stride = stride
+        self.padding = padding
 
-#     def __init__(self, nb_filters, stride, activation_type):
-#         # self.n = n
 
-#     def forwardprop(self):
+    def slow_fprop(self, X, out_height, out_width):
+        time = timer()
+        batch_size = X.shape[0]
+        V = np.zeros([batch_size, self.out_channels, out_height, out_width])
+        s = self.stride
+        for b in range(0, batch_size):
+            for k in range(0, self.out_channels):
+                for i in range(0, out_height):
+                    for j in range(0, out_width):
+                        V[b, k, i, j] = np.add(
+                                np.sum(np.multiply(
+                                        X[b, :, (i*s):(i*s+self.height), (j*s):(j*s+self.width)],
+                                        self.W[k, :, :, :]
+                                        )), 
+                                self.b[k]
+                                )
+        print('Slow thing computed in {:6f}'.format(timer() - time))
+        return V
 
-#     def backprop(self):
+    def fast_fprop(self, X, out_height, out_width):
+        time = timer()
+        batch_size = X.shape[0]
+        in_channels = X.shape[1]
+        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
+        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
+        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
+
+        W_col = self.W.reshape(self.out_channels, -1)
+
+        V = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
+        V = V.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
+        print('Fast thing computed in {:6f}'.format(timer() - time))
+        return V
+
+        
+
+    def forwardprop(self, X, slow=False):
+        """
+        X - [batch_size, in_channels, in_height, in_width]
+        """
+        batch_size, in_channels, in_height, in_width = X.shape
+        out_height, out_width = self.get_output_dims(X)
+        
+        p = self.padding
+        if p == 0:
+            Xp = X
+        else:
+            Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
+        
+        Vs = self.slow_fprop(Xp, out_height, out_width)
+        Vf = self.fast_fprop(Xp, out_height, out_width)
+        print(np.mean(Vs-Vf))
+        
+#        if self.activation_type == "ReLU":
+#            out = ReLU(V)
+#        elif self.activation_type == "None":
+#            out = out # no activation
+#        else:
+#            print("error: unknown activation type")
+#            out = out
+        # return ReLU(V)
+
+
+    def get_output_dims(self, X):
+        batch_size, in_channels, in_height, in_width = X.shape
+
+        assert in_channels == self.in_channels
+        assert (in_height - self.height + 2*self.padding) % self.stride == 0
+        assert (in_width - self.width + 2*self.padding) % self.stride == 0
+
+        out_height = (in_height - self.height + 2*self.padding) // self.stride + 1
+        out_width = (in_width - self.width + 2*self.padding) // self.stride + 1
+        return out_height, out_width
+        
+    def backprop(self):
+        # TODO
+        pass
 
 # class poollayer:
 #     # TODO
@@ -196,7 +296,46 @@ class ConvNet:
             Y_test.append(prediction)
         return Y_test
 
+        
+def get_data_fast(name):
+    #some problems with training labels, fix later
+    data_csv_path = Path('.').resolve().parent/"Data"/(name + ".csv")
+    data_pkl_path = data_csv_path.parent/(name+".pkl")
+    f = None
+    try:
+        with data_pkl_path.open('rb') as f:
+            data = pickle.load(f)
+    except (OSError, IOError) as e:
+        f = str(data_csv_path)
+        data = np.genfromtxt(fname = str(data_csv_path), delimiter = ",")
+        with data_csv_path.open('wb') as f:
+            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+    #data = data[:,:-1]
+    return data
+
+def vis_img(x):
+    """ Take image of dims [channels, h, w], show"""
+    img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    plt.imshow(img)
+    
+
+def main():
+    # Playing with data
+    xtr = get_data_fast("Xtr")[:,:-1]
+    # xte = get_data_fast("Xte")[:,:,-1]
+    # ytr = get_data_fast("Ytr")
+    # Traspose img to [batch_size, channels, im_height, im_width]
+    # Building net
+    xtr = xtr.reshape(-1, 3, 32, 32)
+    W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
+    b1 = np.ones([12]) * 0.1
+    cv1 = ConvLayer(W1, b1)
+    # Doing forward pass
+    V = cv1.forwardprop(xtr[:3, :, :, :]) # just to make sure I didn't mess up indices and all
+    # plt.imshow(V[:, :, 3])
+
 if __name__ == "__main__":
+    # main()
     X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
 
@@ -229,4 +368,5 @@ if __name__ == "__main__":
 
 
 
+    
 
