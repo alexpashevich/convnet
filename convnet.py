@@ -92,6 +92,7 @@ class ConvNet:
         self.nb_layers = 0
 
     def add_layer(self, layer_type, layer_info):
+        ''' add a layer to the NN '''
         if layer_type == "fclayer":
             self.layers.append(fclayer(layer_info))
             self.nb_layers += 1
@@ -105,7 +106,7 @@ class ConvNet:
             print("error: unknown layer type")
 
     def forward_pass(self, X):
-        # return the input data X and outputs of every layer
+        ''' return the input data X and outputs of every layer '''
         cur_input = X
         outputs = []
         outputs.append(cur_input)
@@ -120,7 +121,7 @@ class ConvNet:
         return outputs
 
     def backward_pass(self, errors_batch, outputs_batch):
-        # do the backward pass and return grads for W update
+        ''' do the backward pass and return grads for W update '''
         i = 1
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
@@ -136,13 +137,12 @@ class ConvNet:
         return grad_W, grad_b
 
     def get_minibatch_grads(self, X, Y):
-        # return TODO: write
-
+        ''' return gradients with respect to W and b for a minibatch '''
         loss = 0
+        errors_batch = []
         # outputs = x + layers outputs => len = nb_layers + 1
         # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
         outputs_batch = [[] for _ in range((self.nb_layers + 1))]
-        errors_batch = []
 
         # we do the forward_pass and stack all the outputs in the right order
         for x, y in zip(X, Y):
@@ -161,7 +161,7 @@ class ConvNet:
 
 
     def fit(self, X_train, Y_train, K, step_size, minibatch_size, n_iter):
-        # train the network and adjust the weights during n iterations
+        ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
         Y_train_vector = np.zeros((Y_train.shape[0], K))
@@ -189,6 +189,7 @@ class ConvNet:
             print("Loss = %f" % (loss / X_train.shape[0]))
 
     def predict(self, X_test):
+        ''' make prediction for all elements in X_test based on the learnt model '''
         Y_test = []
         for X in X_test:
             prediction = np.argmax(self.forward_pass(X)[-1])
@@ -196,22 +197,6 @@ class ConvNet:
         return Y_test
 
 if __name__ == "__main__":
-    # iris = load_iris()
-    # X, Y = iris.data, iris.target
-    # K = 3
-
-    # size1 = X.shape[1]
-    # size2 = 50
-    # size3 = 40
-    # size4 = K
-
-    # cnn = ConvNet()
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
-
-    # cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 500)
-
     X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
 
