@@ -30,7 +30,7 @@ class fclayer:
         activation_type = layer_info["activation_type"]
         self.W = np.random.randn(input_size, output_size) # * 0.01 # as in the AlexNet paper
         # print(self.W)
-        self.b = np.zeros(output_size) # * 0.01 # TODO!!! change to np.random.randn
+        self.b = np.random.randn(output_size) # * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
     def get_W_shape(self):
@@ -40,12 +40,7 @@ class fclayer:
         return self.b.shape
 
     def forwardprop(self, X):
-        # print("W_shape = ", self.W.shape)
-        # print("b_shape = ", self.b.shape)
-        # print("X_shape = ", X.shape)
         out = X @ self.W + self.b
-
-        # print("out_shape = ", out.shape)
 
         if self.activation_type == "ReLU":
             out = ReLU(out)
@@ -57,35 +52,18 @@ class fclayer:
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        # dW = error.dot(prev_out.T) # this should be an array with shape (input_size, output_size)
-        # print("error_batch.shape = ", error_batch.shape)
-        # print("prev_out_batch.shape = ", prev_out_batch.shape)
-        # print("cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("W.shape = ", self.W.shape)
-
-        # print("error_batch = ", error_batch)
-        # print("cur_out_batch = ", cur_out_batch)
-        # print("prev_out_batch = ", prev_out_batch)
-
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0
-            # print("updated error_batch = ", error_batch)
+
         dW = prev_out_batch.T @ error_batch
-
-        # print("dW = ", dW)
-
         db = np.sum(error_batch, axis=0)
-        # print("db.shape = ", db.shape)
-        # if self.activation_type == "ReLU": # TODO: uncomment
-            # db[cur_out_batch < 0] = 0 # ???????
-
         dA = error_batch @ self.W.T
 
         return dW, db, dA
 
     def update(self, update_W, update_b):
-        self.W += update_W
-        # self.b += update_b TODO: uncomment
+        self.W -= update_W
+        self.b -= update_b
 
 
 # class convlayer:
@@ -193,23 +171,6 @@ class ConvNet:
         # do fixed number of iterations
         for iter in range(n_iter):
             print("Iteration %d" % iter)
-
-            # print("X is [0.45, 0.87], let us propagate it forward")
-            # forward_out_1 = self.forward_pass([0.45, 0.87])
-            # print(forward_out_1)
-
-            # print("X is [0.77, 0.11], let us propagate it forward")
-            # forward_out_2 = self.forward_pass([0.77, 0.11])
-            # print(forward_out_2)
-
-            # print("and then propagate backward errors of boths")
-            # errors = np.array([forward_out_1[-1] - [1, 0], forward_out_2[-1] - [0, 1]])
-            # outputs = [[forward_out_1[0], forward_out_2[0]], [forward_out_1[1], forward_out_2[1]], [forward_out_1[2], forward_out_2[2]]]
-
-            # grad_W, _ = self.backward_pass(errors, outputs)
-            # print(grad_W[1], grad_W[0])
-
-
             X_train, Y_train_vector = shuffle(X_train, Y_train_vector)
             loss = 0
 
@@ -223,12 +184,11 @@ class ConvNet:
                 # do gradient step for every layer
                 # so far the step size is fixed, smth like RMSprop should be used ideally
                 for i in range(self.nb_layers):
-                    self.layers[i].update(-step_size * grads_W[i], -step_size * grads_b[i])
+                    self.layers[i].update(step_size * grads_W[i], step_size * grads_b[i])
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
     def predict(self, X_test):
-        # TODO: smth like this, check
         Y_test = []
         for X in X_test:
             prediction = np.argmax(self.forward_pass(X)[-1])
@@ -260,12 +220,14 @@ if __name__ == "__main__":
     np.random.seed(228)
     size1 = 2
     size2 = 100
-    size3 = 2
+    size3 = 40
+    size4 = 2
 
     cnn = ConvNet()
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "None"})
-    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 20)
+    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
+    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 30)
 
 
     y_pred = cnn.predict(X_test)
