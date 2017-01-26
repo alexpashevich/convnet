@@ -28,9 +28,9 @@ class fclayer:
         input_size = layer_info["input_size"]
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
-        self.W = np.random.randn(output_size, input_size) # * 0.01 # as in the AlexNet paper
-        print(self.W)
-        self.b = np.random.randn(output_size) # * 0.01
+        self.W = np.random.randn(input_size, output_size) # * 0.01 # as in the AlexNet paper
+        # print(self.W)
+        self.b = np.zeros(output_size) # * 0.01 # TODO!!! change to np.random.randn
         self.activation_type = activation_type # so far only ReLU is implemented
 
     def get_W_shape(self):
@@ -43,7 +43,7 @@ class fclayer:
         # print("W_shape = ", self.W.shape)
         # print("b_shape = ", self.b.shape)
         # print("X_shape = ", X.shape)
-        out = self.W.dot(X) + self.b
+        out = X @ self.W + self.b
 
         # print("out_shape = ", out.shape)
 
@@ -56,30 +56,36 @@ class fclayer:
             out = out
         return out
 
-    def backprop(self, error, cur_out, prev_out):
-        # dW = error.dot(prev_out.T) # this should be an array with shape (output_size, input_size)
-        dW = np.outer(error, prev_out)
-        if self.activation_type == "ReLU":
-            dW[cur_out < 0] = 0
+    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
+        # dW = error.dot(prev_out.T) # this should be an array with shape (input_size, output_size)
+        # print("error_batch.shape = ", error_batch.shape)
+        # print("prev_out_batch.shape = ", prev_out_batch.shape)
+        # print("cur_out_batch.shape = ", cur_out_batch.shape)
+        # print("W.shape = ", self.W.shape)
 
-        db = error
-        # print("db_shape = ", db.shape)
-        if self.activation_type == "ReLU":
-            db[cur_out < 0] = 0
+        # print("error_batch = ", error_batch)
+        # print("cur_out_batch = ", cur_out_batch)
+        # print("prev_out_batch = ", prev_out_batch)
 
-        dA = self.W.T.dot(error) # this should be a vector with length input_size
         if self.activation_type == "ReLU":
-            dA[cur_out < 0] = 0
+            error_batch[cur_out_batch <= 0] = 0
+            # print("updated error_batch = ", error_batch)
+        dW = prev_out_batch.T @ error_batch
 
-        # in the example it was
-        # dW = dD.dot(X.T)
-        # dX = W.T.dot(dD)
+        # print("dW = ", dW)
+
+        db = np.sum(error_batch, axis=0)
+        # print("db.shape = ", db.shape)
+        # if self.activation_type == "ReLU": # TODO: uncomment
+            # db[cur_out_batch < 0] = 0 # ???????
+
+        dA = error_batch @ self.W.T
 
         return dW, db, dA
 
     def update(self, update_W, update_b):
         self.W += update_W
-        self.b += update_b
+        # self.b += update_b TODO: uncomment
 
 
 # class convlayer:
@@ -135,44 +141,43 @@ class ConvNet:
 
         return outputs
 
-    def backward_pass(self, y_true, outputs):
+    def backward_pass(self, errors_batch, outputs_batch):
         # do the backward pass and return grads for W update
         i = 1
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
-        errors = outputs[-1] - y_true # we expect CE loss and softmax in the end
+        # errors = outputs[-1] - y_true # we expect CE loss and softmax in the end
+        # print("errors = ", errors)
         for layer in reversed(self.layers):
             # we skip the last output as it contains the final classification output
-            (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i])
-            grad_W[-i] = dW # we use the returned order here in order to obtain the normal order in the end
+            (dW, db, errors_batch) = layer.backprop(errors_batch, np.array(outputs_batch[-i]), np.array(outputs_batch[-1 - i]))
+            grad_W[-i] = dW # we use the returned order here in order to obtain the regular order in the end
             grad_b[-i] = db # the same here
             i += 1
 
         return grad_W, grad_b
 
     def get_minibatch_grads(self, X, Y):
-        # return averaged gards over the minibatch
-        list_grads_W = []
-        list_grads_b = []
-        loss = 0
-        minibatch_size = X.shape[0]
-        for i in range(minibatch_size):
-            outputs = self.forward_pass(X[i,:])
-            grad_W, grad_b = self.backward_pass(Y[i,:], outputs)
-            list_grads_W.append(grad_W)
-            list_grads_b.append(grad_b)
-            loss += CE_loss(Y[i,:], outputs[-1])
+        # return TODO: write
 
-        grads_W = []
-        grads_b = []
-        for i in range(self.nb_layers):
-            grads_W.append(np.zeros(self.layers[i].get_W_shape()))
-            grads_b.append(np.zeros(self.layers[i].get_b_shape()))
-            for j in range(minibatch_size):
-                grads_W[i] += list_grads_W[j][i]
-                grads_b[i] += list_grads_b[j][i]
-            grads_W[i] /= minibatch_size
-            grads_b[i] /= minibatch_size
+        loss = 0
+        # outputs = x + layers outputs => len = nb_layers + 1
+        # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
+        outputs_batch = [[] for _ in range((self.nb_layers + 1))]
+        errors_batch = []
+
+        # we do the forward_pass and stack all the outputs in the right order
+        for x, y in zip(X, Y):
+            outputs = self.forward_pass(x)
+
+            errors = outputs[-1] - y
+            # TODO: redo everything with fancy numpy functions instead of ugly loops
+            for i in range(self.nb_layers + 1):
+                outputs_batch[i].append(outputs[i])
+            errors_batch.append(errors)
+            loss += CE_loss(y, outputs[-1])
+
+        grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch)
 
         return grads_W, grads_b, loss
 
@@ -188,6 +193,23 @@ class ConvNet:
         # do fixed number of iterations
         for iter in range(n_iter):
             print("Iteration %d" % iter)
+
+            # print("X is [0.45, 0.87], let us propagate it forward")
+            # forward_out_1 = self.forward_pass([0.45, 0.87])
+            # print(forward_out_1)
+
+            # print("X is [0.77, 0.11], let us propagate it forward")
+            # forward_out_2 = self.forward_pass([0.77, 0.11])
+            # print(forward_out_2)
+
+            # print("and then propagate backward errors of boths")
+            # errors = np.array([forward_out_1[-1] - [1, 0], forward_out_2[-1] - [0, 1]])
+            # outputs = [[forward_out_1[0], forward_out_2[0]], [forward_out_1[1], forward_out_2[1]], [forward_out_1[2], forward_out_2[2]]]
+
+            # grad_W, _ = self.backward_pass(errors, outputs)
+            # print(grad_W[1], grad_W[0])
+
+
             X_train, Y_train_vector = shuffle(X_train, Y_train_vector)
             loss = 0
 
@@ -230,21 +252,25 @@ if __name__ == "__main__":
 
     # cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 500)
 
-
     X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
 
-    run_nn(X_train, X_test, Y_train, Y_test)
-    # np.random.seed(228)
+    # run_nn(X_train, X_test, Y_train, Y_test)
 
-    # size1 = 2
-    # size2 = 100
-    # size3 = 2
+    np.random.seed(228)
+    size1 = 2
+    size2 = 100
+    size3 = 2
 
-    # cnn = ConvNet()
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    # cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
+    cnn = ConvNet()
+    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "None"})
+    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 20)
+
+
+    y_pred = cnn.predict(X_test)
+    accs = (y_pred == Y_test).sum() / Y_test.size
+    print('Mean accuracy: %f' % accs)
 
 
 
