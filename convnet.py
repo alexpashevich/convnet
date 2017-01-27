@@ -113,7 +113,6 @@ class ConvLayer(object):
         self.stride = stride
         self.padding = padding
 
-
     def slow_fprop(self, X, out_height, out_width):
         time = timer()
         batch_size = X.shape[0]
@@ -140,16 +139,12 @@ class ConvLayer(object):
         k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
         X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
         X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
-
         W_col = self.W.reshape(self.out_channels, -1)
-
         V = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
         V = V.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
         print('Fast thing computed in {:6f}'.format(timer() - time))
         return V
-
         
-
     def forwardprop(self, X, slow=False):
         """
         X - [batch_size, in_channels, in_height, in_width]
@@ -164,8 +159,8 @@ class ConvLayer(object):
             Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
         
         Vs = self.slow_fprop(Xp, out_height, out_width)
-        Vf = self.fast_fprop(Xp, out_height, out_width)
-        print(np.mean(Vs-Vf))
+        V = self.fast_fprop(Xp, out_height, out_width)
+        print(np.mean(Vs-V))
         
 #        if self.activation_type == "ReLU":
 #            out = ReLU(V)
@@ -174,7 +169,7 @@ class ConvLayer(object):
 #        else:
 #            print("error: unknown activation type")
 #            out = out
-        # return ReLU(V)
+        return ReLU(V)
 
 
     def get_output_dims(self, X):
@@ -188,10 +183,27 @@ class ConvLayer(object):
         out_width = (in_width - self.width + 2*self.padding) // self.stride + 1
         return out_height, out_width
         
-    def backprop(self):
+    def backprop(self, error, X):
         # TODO
-        pass
+        batch_size, in_channels, in_height, in_width = X.shape
+        out_height, out_width = self.get_output_dims(X)
+        
+        # Do im2col trick once again
+        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
+        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
+        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
+        
+        db = np.sum(error, axis=(0, 2, 3))
+        db = db.reshape(self.out_channels, -1)
 
+        dout_reshaped = error.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
+        dW = np.matmul(dout_reshaped, X_col.T)
+        dW = dW.reshape(self.W.shape)
+        #W_reshape = W.reshape(self.out_channels, -1)
+        #dX_col = W_reshape.T @ dout_reshaped
+       
+        return dW, db
+        
 # class poollayer:
 #     # TODO
 
@@ -348,7 +360,7 @@ def main():
     b1 = np.ones([12]) * 0.1
     cv1 = ConvLayer(W1, b1)
     # Doing forward pass
-    V = cv1.forwardprop(xtr[:3, :, :, :]) # just to make sure I didn't mess up indices and all
+    V = cv1.forwardprop(xtr[:3, :, :, :]) 
     # plt.imshow(V[:, :, 3])
 
 if __name__ == "__main__":
