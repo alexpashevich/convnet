@@ -157,8 +157,8 @@ class ConvLayer(object):
 #        else:
 #            print("error: unknown activation type")
 #            out = out
-        # return ReLU(output)
-        return output
+        return ReLU(output)
+        #return output
 
 
     def get_output_dims(self, X): # we need it because not every filter size can be applied
