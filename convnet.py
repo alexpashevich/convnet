@@ -5,8 +5,9 @@ import math
 from pathlib import Path
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
+import tensorflow as tf
 # import matplotlib.pyplot as plt
 
 
@@ -100,16 +101,16 @@ class ConvLayer(object):
         self.stride = stride
         self.padding = padding
 
-    def slow_fprop(self, X, out_height, out_width):
+    def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
         time = timer()
         batch_size = X.shape[0]
-        V = np.zeros([batch_size, self.out_channels, out_height, out_width])
+        output = np.zeros([batch_size, self.out_channels, out_height, out_width])
         s = self.stride
         for b in range(0, batch_size):
             for k in range(0, self.out_channels):
                 for i in range(0, out_height):
                     for j in range(0, out_width):
-                        V[b, k, i, j] = np.add(
+                        output[b, k, i, j] = np.add(
                                 np.sum(np.multiply(
                                         X[b, :, (i*s):(i*s+self.height), (j*s):(j*s+self.width)],
                                         self.W[k, :, :, :]
@@ -117,7 +118,7 @@ class ConvLayer(object):
                                 self.b[k]
                                 )
         print('Slow thing computed in {:6f}'.format(timer() - time))
-        return V
+        return output
 
     def fast_fprop(self, X, out_height, out_width):
         time = timer()
@@ -127,10 +128,10 @@ class ConvLayer(object):
         X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
         X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
         W_col = self.W.reshape(self.out_channels, -1)
-        V = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
-        V = V.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
+        output = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
+        output = output.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
         print('Fast thing computed in {:6f}'.format(timer() - time))
-        return V
+        return output
         
     def forwardprop(self, X, slow=False):
         """
@@ -145,9 +146,9 @@ class ConvLayer(object):
         else:
             Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
         
-        Vs = self.slow_fprop(Xp, out_height, out_width)
-        V = self.fast_fprop(Xp, out_height, out_width)
-        print(np.mean(Vs-V))
+        # Vs = self.slow_fprop(Xp, out_height, out_width)
+        output = self.fast_fprop(Xp, out_height, out_width)
+        # print(np.mean(Vs-V))
         
 #        if self.activation_type == "ReLU":
 #            out = ReLU(V)
@@ -156,22 +157,30 @@ class ConvLayer(object):
 #        else:
 #            print("error: unknown activation type")
 #            out = out
-        return ReLU(V)
+        # return ReLU(output)
+        return output
 
 
-    def get_output_dims(self, X):
+    def get_output_dims(self, X): # we need it because not every filter size can be applied
         batch_size, in_channels, in_height, in_width = X.shape
-
         assert in_channels == self.in_channels
         assert (in_height - self.height + 2*self.padding) % self.stride == 0
         assert (in_width - self.width + 2*self.padding) % self.stride == 0
-
         out_height = (in_height - self.height + 2*self.padding) // self.stride + 1
         out_width = (in_width - self.width + 2*self.padding) // self.stride + 1
         return out_height, out_width
         
-    def backprop(self, error, X):
-        # TODO
+    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
+        """
+        What shall we do here:
+        1. Compute derivative of activ. func. in cur_out_batch
+        2. Multiply transposed prev. weights (prev_out_batch) by error batch
+        3. Multiply 1 by 2              
+        """
+      #  if self.activation_type == "ReLU":
+        error_batch[cur_out_batch <= 0] = 0 # Step 1
+
+        X = prev_out_batch # previous output of the layer
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
         
@@ -179,17 +188,31 @@ class ConvLayer(object):
         k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
         X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
         X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
+        # Here we just transposed X into columns, in the same way as in forward phase
         
-        db = np.sum(error, axis=(0, 2, 3))
+        # here we sum up all errors, reshape them into matrix as well
+        db = np.sum(error_batch, axis=(0, 2, 3))
         db = db.reshape(self.out_channels, -1)
-
-        dout_reshaped = error.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
+        
+        # Here - we reshape batch of errors in order to multiply it by weights
+        dout_reshaped = error_batch.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
         dW = np.matmul(dout_reshaped, X_col.T)
         dW = dW.reshape(self.W.shape)
-        #W_reshape = W.reshape(self.out_channels, -1)
-        #dX_col = W_reshape.T @ dout_reshaped
+        W_reshape = self.W.reshape(self.out_channels, -1)
+        dX_col = W_reshape.T @ dout_reshaped
+        
+        # Reshape dX back
+        dX_reshaped = dX_col.reshape(self.in_channels * self.height * self.width, -1, batch_size).transpose(2, 0, 1)
+        h_pad, w_pad = in_height + 2*self.padding, in_width + 2*self.padding
+        x_pad = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
+        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped)
+        # remove padding (if any)
+        if self.padding == 0:
+            dX = x_pad
+        else:
+            dX = x_pad[:, :, self.padding:-self.padding, self.padding:-self.padding]
        
-        return dW, db
+        return dW, db, dX
         
 # class poollayer:
 #     # TODO
@@ -374,8 +397,48 @@ def main():
     W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
     b1 = np.ones([12]) * 0.1
     cv1 = ConvLayer(W1, b1)
+    #
+    input_batch = xtr[:3, :, :, :]
     # Doing forward pass
-    V = cv1.forwardprop(xtr[:3, :, :, :]) 
+    V = cv1.forwardprop(input_batch) 
+    er1 = np.random.random(V.shape)
+    B = cv1.backprop(V-er1, V, input_batch)
+
+
+    # TENSORFLOW RELATED STUFF
+    # INPUTS: batch|channels|height|width --> batch|height|width|channels
+    tf_input_batch = input_batch.transpose(0, 2, 3, 1)
+    # WEIGHTS: out_channels|in_channels|height|width ---> heigh|width|in_channels|out_channels
+    tf_W1 = W1.transpose(2, 3, 1, 0)
+    # LOSS: like inputs
+    tf_er1 = er1.transpose(0, 2, 3, 1)
+
+    # Convolution
+    ibatch_ = tf.placeholder(tf.float32, shape=tf_input_batch.shape)
+    W_ = tf.Variable(initial_value=tf_W1, dtype=tf.float32)
+    b_ = tf.Variable(initial_value=b1, dtype=tf.float32)
+    conv  = tf.nn.conv2d(ibatch_, W_, strides=[1,1,1,1], padding='VALID', use_cudnn_on_gpu=False)
+    pre_activation = tf.nn.bias_add(conv, b_)
+    # conv2 = tf.nn.relu(pre_activation)
+    conv2 = pre_activation
+
+    # Conv gradients
+    er1_ = tf.placeholder(tf.float32, shape=tf_er1.shape)
+    silly_loss = conv2-er1_
+    tfgrad = tf.gradients(silly_loss, W_)
+
+    with tf.Session() as sess:
+        with tf.device('/cpu:0'):
+            sess.run(tf.global_variables_initializer())
+            V_, B_, loss_ = sess.run([conv2, tfgrad, silly_loss], feed_dict={
+                ibatch_:tf_input_batch.astype('float32'),
+                er1_: tf_er1.astype('float32')})
+
+    tf_conv_mistake = np.mean(V.transpose(0, 2, 3, 1) - V_)
+    tf_grad_mistake = np.mean(W1.transpose(2, 3, 1, 0) - B_)
+    print('conv_mistake = {}'.format(tf_conv_mistake))
+    print('grad_mistake = {}'.format(tf_grad_mistake))
+
     # plt.imshow(V[:, :, 3])
 
 def test_moons():
@@ -432,15 +495,16 @@ def try_kaggle():
     cnn.add_layer("fclayer", layer_info = {"input_size": size5, "output_size": size6, "activation_type": "None"})
     # cnn.add_layer("fclayer", layer_info = {"input_size": size6, "output_size": size7, "activation_type": "None"})
 
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
-    y_test = cnn.predict(X_test)
-    y_test.dump("Yte.dat")
+    #cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
+    #y_test = cnn.predict(X_test)
+    #y_test.dump("Yte.dat")
 
 
 if __name__ == "__main__":
-    # main()
+     main()
     # test_moons()
-    try_kaggle()
+    # try_kaggle()
+
 
     
 
