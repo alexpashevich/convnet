@@ -1,28 +1,31 @@
 import numpy as np
+import pandas as pd
 import pickle
+import math
 from pathlib import Path
 from sklearn.utils import shuffle
-# from sklearn.datasets import load_iris, make_moons
+from sklearn.datasets import make_moons
+from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
-import matplotlib.pyplot as plt
- 
-#from yann import run_nn
+# import matplotlib.pyplot as plt
+
 
 def ReLU(input_array):
     # rectified linear unit activation function
     return np.maximum(input_array, 0)
 
-def CE_loss(labels_x, output_x):
+def CE_loss(y_true, y_pred):
     # cross entropy loss (multinomial regression)
-    return -np.sum(labels_x * np.log(output_x))
+    y_pred[y_pred < 1e-7] = 1e-7 # we clip values in order to prevent log of very small value
+    return -np.sum(y_true * np.log(y_pred))
 
 def sigmoid(input_array): # not used now
     # sigmoid activation function
     return 1. / (1 + np.exp(-input_array))
 
-def square_loss(labels_x, output_x): # not used now
+def square_loss(y_true, y_pred): # not used now
     # square loss
-    return 1. / 2 * np.sum((labels_x - output_x) ** 2)
+    return 1. / 2 * np.sum((y_true - y_pred) ** 2)
 
 
 class fclayer:
@@ -31,8 +34,8 @@ class fclayer:
         input_size = layer_info["input_size"]
         output_size = layer_info["output_size"]
         activation_type = layer_info["activation_type"]
-        self.W = np.random.randn(output_size, input_size) # * 0.01 # as in the AlexNet paper
-        self.b = np.random.randn(output_size) # * 0.01
+        self.W = np.random.randn(input_size, output_size) * 0.01 # as in the AlexNet paper
+        self.b = np.random.randn(output_size) * 0.01
         self.activation_type = activation_type # so far only ReLU is implemented
 
     def get_W_shape(self):
@@ -42,12 +45,7 @@ class fclayer:
         return self.b.shape
 
     def forwardprop(self, X):
-        # print("W_shape = ", self.W.shape)
-        # print("b_shape = ", self.b.shape)
-        # print("X_shape = ", X.shape)
-        out = self.W.dot(X) + self.b
-
-        # print("out_shape = ", out.shape)
+        out = X @ self.W + self.b
 
         if self.activation_type == "ReLU":
             out = ReLU(out)
@@ -58,30 +56,19 @@ class fclayer:
             out = out
         return out
 
-    def backprop(self, error, cur_out, prev_out):
-        # dW = error.dot(prev_out.T) # this should be an array with shape (output_size, input_size)
-        dW = np.outer(error, prev_out)
+    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
         if self.activation_type == "ReLU":
-            dW[cur_out < 0] = 0
+            error_batch[cur_out_batch <= 0] = 0
 
-        db = error
-        # print("db_shape = ", db.shape)
-        if self.activation_type == "ReLU":
-            db[cur_out < 0] = 0
-
-        dA = self.W.T.dot(error) # this should be a vector with length input_size
-        if self.activation_type == "ReLU":
-            dA[cur_out < 0] = 0
-
-        # in the example it was
-        # dW = dD.dot(X.T)
-        # dX = W.T.dot(dD)
+        dW = prev_out_batch.T @ error_batch
+        db = np.sum(error_batch, axis=0)
+        dA = error_batch @ self.W.T
 
         return dW, db, dA
 
     def update(self, update_W, update_b):
-        self.W += update_W
-        self.b += update_b
+        self.W -= update_W
+        self.b -= update_b
 
 """
 im2col trick
@@ -220,6 +207,7 @@ class ConvNet:
         self.nb_layers = 0
 
     def add_layer(self, layer_type, layer_info):
+        ''' add a layer to the NN '''
         if layer_type == "fclayer":
             self.layers.append(fclayer(layer_info))
             self.nb_layers += 1
@@ -233,7 +221,7 @@ class ConvNet:
             print("error: unknown layer type")
 
     def forward_pass(self, X):
-        # return the input data X and outputs of every layer
+        ''' return the input data X and outputs of every layer '''
         cur_input = X
         outputs = []
         outputs.append(cur_input)
@@ -241,89 +229,115 @@ class ConvNet:
             cur_input = layer.forwardprop(cur_input)
             outputs.append(cur_input)
 
-        # the softmax layer
-        cur_input = np.exp(cur_input) / np.exp(cur_input).sum()
+        # the softmax layer, we subtract maximum to avoid overflow
+        cur_input = np.exp(cur_input - np.max(cur_input)) / np.exp(cur_input - np.max(cur_input)).sum()
         outputs.append(cur_input)
 
         return outputs
 
-    def backward_pass(self, labels, outputs):
-        # do the backward pass and return grads for W update
+    def backward_pass(self, errors_batch, outputs_batch):
+        ''' do the backward pass and return grads for W update '''
         i = 1
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
-        errors = outputs[-1] - labels # we expect CE loss and softmax in the end
         for layer in reversed(self.layers):
             # we skip the last output as it contains the final classification output
-            (dW, db, errors) = layer.backprop(errors, cur_out=outputs[-1 - i], prev_out=outputs[-2 - i])
-            grad_W[-i] = dW # we use the returned order here in order to obtain the normal order in the end
+            (dW, db, errors_batch) = layer.backprop(errors_batch, np.array(outputs_batch[-i]), np.array(outputs_batch[-1 - i]))
+            grad_W[-i] = dW # we use the returned order here in order to obtain the regular order in the end
             grad_b[-i] = db # the same here
             i += 1
 
         return grad_W, grad_b
 
     def get_minibatch_grads(self, X, Y):
-        # return averaged gards over the minibatch
-        list_grads_W = []
-        list_grads_b = []
+        ''' return gradients with respect to W and b for a minibatch '''
         loss = 0
-        minibatch_size = X.shape[0]
-        for i in range(minibatch_size):
-            outputs = self.forward_pass(X[i,:])
-            grad_W, grad_b = self.backward_pass(Y[i,:], outputs)
-            list_grads_W.append(grad_W)
-            list_grads_b.append(grad_b)
-            loss += CE_loss(Y[i,:], outputs[-1])
+        errors_batch = []
+        # outputs = x + layers outputs => len = nb_layers + 1
+        # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
+        outputs_batch = [[] for _ in range(self.nb_layers + 1)]
 
-        grads_W = []
-        grads_b = []
-        for i in range(self.nb_layers):
-            grads_W.append(np.zeros(self.layers[i].get_W_shape()))
-            grads_b.append(np.zeros(self.layers[i].get_b_shape()))
-            for j in range(minibatch_size):
-                grads_W[i] += list_grads_W[j][i]
-                grads_b[i] += list_grads_b[j][i]
-            grads_W[i] /= minibatch_size
-            grads_b[i] /= minibatch_size
+        # we do the forward_pass and stack all the outputs in the right order
+        for x, y in zip(X, Y):
+            outputs = self.forward_pass(x)
+
+            errors = outputs[-1] - y
+            # TODO: redo everything with fancy numpy functions instead of ugly loops
+            for i in range(self.nb_layers + 1):
+                outputs_batch[i].append(outputs[i])
+            errors_batch.append(errors)
+            loss += CE_loss(y, outputs[-1])
+
+        grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch)
 
         return grads_W, grads_b, loss
 
 
-    def fit(self, X_train, Y_train, K, step_size, minibatch_size, n_iter):
-        # train the network and adjust the weights during n iterations
+    def fit(self, X_train, y_train, K, minibatch_size, n_iter,
+            X_cv = None, y_cv = None, step_size = 0.01, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False):
+        ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
-        Y_train_vector = np.zeros((Y_train.shape[0], K))
-        for i in range(Y_train.shape[0]):
-            Y_train_vector[i, Y_train[i]] = 1
+        y_train_vector = np.zeros((y_train.shape[0], K))
+        for i in range(y_train.shape[0]):
+            y_train_vector[i, y_train[i]] = 1
 
+        # we will need this for RMSprop
+        E_g_W = [np.zeros(layer.get_W_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. W
+        E_g_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
+
+        loss = math.inf
         # do fixed number of iterations
         for iter in range(n_iter):
             print("Iteration %d" % iter)
-            X_train, Y_train_vector = shuffle(X_train, Y_train_vector)
+            X_train, y_train_vector = shuffle(X_train, y_train_vector)
+            prev_loss = loss
             loss = 0
 
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
                 X_minibatch = X_train[i:i + minibatch_size] # TODO: check if it is okey when X_size % minibatch_size != 0
-                Y_minibatch = Y_train_vector[i:i + minibatch_size]
+                y_minibatch = y_train_vector[i:i + minibatch_size]
 
-                (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, Y_minibatch) # implement with the backward_pass
+                (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
                 loss += minibatch_loss
-                # do gradient step for every layer
-                # so far the step size is fixed, smth like RMSprop should be used ideally
+
+                # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
                 for i in range(self.nb_layers):
-                    self.layers[i].update(-step_size * grads_W[i], -step_size * grads_b[i])
+                    E_g_W[i] = gamma * E_g_W[i] + (1 - gamma) * (grads_W[i] ** 2)
+                    E_g_b[i] = gamma * E_g_b[i] + (1 - gamma) * (grads_b[i] ** 2)
+
+                # do gradient step for every layer
+                for i in range(self.nb_layers):
+                    if use_vanila_sgd:
+                        self.layers[i].update(step_size * grads_W[i], step_size * grads_b[i])
+                    else:
+                        # do RMSprop step
+                        self.layers[i].update(step_size / np.sqrt(E_g_W[i] + epsilon) * grads_W[i],
+                                              step_size / np.sqrt(E_g_b[i] + epsilon) * grads_b[i])
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
+
+            if X_cv is not None and y_cv is not None:
+                y_cv_vector = np.zeros((y_cv.shape[0], K))
+                for i in range(y_cv.shape[0]):
+                    y_cv_vector[i, y_cv[i]] = 1
+                y_cv_pred = self.predict(X_cv)
+                accs = (y_cv_pred == y_cv).sum() / y_cv.size
+                print("Accuracy on cross validation = %f" % accs)
+
+            if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
+                print("Termination criteria is true, I stop the learning...")
+                break
+
     def predict(self, X_test):
-        # TODO: smth like this, check
-        Y_test = []
+        ''' make prediction for all elements in X_test based on the learnt model '''
+        y_test = []
         for X in X_test:
             prediction = np.argmax(self.forward_pass(X)[-1])
-            Y_test.append(prediction)
-        return Y_test
+            y_test.append(prediction)
+        return np.array(y_test)
 
         
 def get_data_fast(name):
@@ -346,6 +360,7 @@ def vis_img(x):
     """ Take image of dims [channels, h, w], show"""
     img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
     plt.imshow(img)
+    plt.show()
     
 
 def main():
@@ -363,37 +378,81 @@ def main():
     V = cv1.forwardprop(xtr[:3, :, :, :]) 
     # plt.imshow(V[:, :, 3])
 
+def test_moons():
+    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
+
+    # run_nn(X_train, X_test, Y_train, Y_test)
+
+    np.random.seed(228)
+    size1 = 2
+    size2 = 100
+    size3 = 40
+    size4 = 2
+
+    cnn = ConvNet()
+    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
+    cnn.fit(X, Y, K = 2, minibatch_size = 50, n_iter = 30)
+
+    y_pred = cnn.predict(X_test)
+    accs = (y_pred == Y_test).sum() / Y_test.size
+    print('Mean accuracy: %f' % accs)
+
+def try_kaggle():
+    X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
+    y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
+    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+
+    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+
+    # vis_img(X_test[40,:])
+
+    print(X_train.shape)
+    print(y_train.shape)
+    print(X_cv.shape)
+    print(y_cv.shape)
+    print(X_test.shape)
+
+    nb_features = 32 * 32 * 3
+    nb_classes = 10
+    size1 = nb_features
+    size2 = 2000
+    size3 = 2000
+    size4 = 500
+    size5 = 200
+    size6 = nb_classes
+
+    cnn = ConvNet()
+    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size4, "output_size": size5, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": size5, "output_size": size6, "activation_type": "None"})
+    # cnn.add_layer("fclayer", layer_info = {"input_size": size6, "output_size": size7, "activation_type": "None"})
+
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
+    y_test = cnn.predict(X_test)
+    y_test.dump("Yte.dat")
+
+
 if __name__ == "__main__":
-    main()
-    #####################################################
+    # main()
+    # test_moons()
+    try_kaggle()
+
+    
 
 
-#    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
-#    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
-#
-#    # run_nn(X_train, X_test, Y_train, Y_test)
-#    size1 = 2
-#    size2 = 100
-#    size3 = 2
-#
-#    cnn = ConvNet()
-#    cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-#    cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-#    cnn.fit(X, Y, K = 2, step_size = 1e-4, minibatch_size = 50, n_iter = 100)
 
 
-    # iris = load_iris()
-    # X, Y = iris.data, iris.target
-    # K = 3
 
-    # size1 = X.shape[1]
-    # size2 = 50
-    # size3 = 40
-    # size4 = K
 
-    # cnn = ConvNet()
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
 
-    # cnn.fit(X, Y, K = K, step_size = 0.01, minibatch_size = 10, n_iter = 500)
+
+
+
+
+    
+
