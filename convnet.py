@@ -157,8 +157,8 @@ class ConvLayer(object):
 #        else:
 #            print("error: unknown activation type")
 #            out = out
-        return ReLU(output)
-        #return output
+        #return ReLU(output)
+        return output
 
 
     def get_output_dims(self, X): # we need it because not every filter size can be applied
@@ -178,11 +178,12 @@ class ConvLayer(object):
         3. Multiply 1 by 2              
         """
       #  if self.activation_type == "ReLU":
-        error_batch[cur_out_batch <= 0] = 0 # Step 1
+        #error_batch[cur_out_batch <= 0] = 0 # Step 1
 
         X = prev_out_batch # previous output of the layer
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
+        #import pudb; pudb.set_trace()  # XXX BREAKPOINT
         
         # Do im2col trick once again
         k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
@@ -191,8 +192,9 @@ class ConvLayer(object):
         # Here we just transposed X into columns, in the same way as in forward phase
         
         # here we sum up all errors, reshape them into matrix as well
-        db = np.sum(error_batch, axis=(0, 2, 3))
-        db = db.reshape(self.out_channels, -1)
+        db = np.sum(error_batch, axis=(0, 2, 3)) # ?? Do we sum it as it should be
+        #db = np.sum(error_batch, axis=(0, 3, 2))
+        db = db.reshape(self.out_channels, -1) 
         
         # Here - we reshape batch of errors in order to multiply it by weights
         dout_reshaped = error_batch.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
@@ -427,17 +429,32 @@ def main():
     silly_loss = conv2-er1_
     tfgrad = tf.gradients(silly_loss, W_)
 
+    # more grads
+    opt = tf.train.AdagradOptimizer(0.1)
+    grads = opt.compute_gradients(silly_loss)
+
     with tf.Session() as sess:
         with tf.device('/cpu:0'):
             sess.run(tf.global_variables_initializer())
-            V_, B_, loss_ = sess.run([conv2, tfgrad, silly_loss], feed_dict={
+            V_, B_, loss_, grads_ = sess.run([conv2, tfgrad, silly_loss, grads], feed_dict={
                 ibatch_:tf_input_batch.astype('float32'),
                 er1_: tf_er1.astype('float32')})
 
-    tf_conv_mistake = np.mean(V.transpose(0, 2, 3, 1) - V_)
-    tf_grad_mistake = np.mean(W1.transpose(2, 3, 1, 0) - B_)
-    print('conv_mistake = {}'.format(tf_conv_mistake))
-    print('grad_mistake = {}'.format(tf_grad_mistake))
+    print('TF_conv_mistake = {}'.format(np.mean(V.transpose(0, 2, 3, 1) - V_)))
+    print('TF_grad_mistake = {}'.format(np.mean(B[0].transpose(2, 3, 1, 0) - B_)))
+    print('TF_grad_sum  = {} {}'.format(np.sum(B[0].transpose(2, 3, 1, 0)), np.sum(B_)))
+    
+    # Hipsternet
+    import sys
+    sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
+    import hipsternet.layer as hl
+    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 0)
+    OUT = hl.conv_backward(out - er1, cache)
+
+    print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
+    print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
+    print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
+    
 
     # plt.imshow(V[:, :, 3])
 
@@ -501,7 +518,8 @@ def try_kaggle():
 
 
 if __name__ == "__main__":
-     main()
+    np.random.seed(500)
+    main()
     # test_moons()
     # try_kaggle()
 
