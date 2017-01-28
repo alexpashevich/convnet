@@ -7,8 +7,12 @@ from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 #from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
-import tensorflow as tf
-# import matplotlib.pyplot as plt
+# import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from utils import vis_img, get_data_fast, get_im2col_indices
+from fclayer import fclayer
+from poollayer import poollayer
 
 
 def ReLU(input_array):
@@ -29,69 +33,8 @@ def square_loss(y_true, y_pred): # not used now
     return 1. / 2 * np.sum((y_true - y_pred) ** 2)
 
 
-class fclayer:
-
-    def __init__(self, layer_info):
-        input_size = layer_info["input_size"]
-        output_size = layer_info["output_size"]
-        activation_type = layer_info["activation_type"]
-        self.W = np.random.randn(input_size, output_size) * 0.01 # as in the AlexNet paper
-        self.b = np.random.randn(output_size) * 0.01
-        self.activation_type = activation_type # so far only ReLU is implemented
-
-    def get_W_shape(self):
-        return self.W.shape
-
-    def get_b_shape(self):
-        return self.b.shape
-
-    def forwardprop(self, X):
-        out = X @ self.W + self.b
-
-        if self.activation_type == "ReLU":
-            out = ReLU(out)
-        elif self.activation_type == "None":
-            out = out # no activation
-        else:
-            print("error: unknown activation type")
-            out = out
-        return out
-
-    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        if self.activation_type == "ReLU":
-            error_batch[cur_out_batch <= 0] = 0
-
-        dW = prev_out_batch.T @ error_batch
-        db = np.sum(error_batch, axis=0)
-        dA = error_batch @ self.W.T
-
-        return dW, db, dA
-
-    def update(self, update_W, update_b):
-        self.W -= update_W
-        self.b -= update_b
-
-"""
-im2col trick
-Courtesy of :
-    https://github.com/wiseodd/hipsternet/blob/f4b46e0a7856e45553955893b266df60bae8083c/hipsternet/im2col.py
-"""
-def get_im2col_indices(in_channels, height, width, out_height, out_width, stride):
-    i0 = np.repeat(np.arange(height), width) 
-    i0 = np.tile(i0, in_channels)
-    i1 = stride * np.repeat(np.arange(out_height), out_width)
-    j0 = np.tile(np.arange(width), height * in_channels)
-    j1 = stride * np.tile(np.arange(out_width), out_height)
-    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
-    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
-    k = np.repeat(np.arange(in_channels), height * width).reshape(-1, 1)
-    k = k.astype(int)
-    i = i.astype(int)
-    j = j.astype(int)
-    return k, i, j
-
 class ConvLayer(object):
-    def __init__(self, W, b, stride=1, padding=0):   
+    def __init__(self, W, b, stride=1, padding=0):
         """
         W - [out_channels, in_channels, height, width]
         """
@@ -187,7 +130,7 @@ class ConvLayer(object):
         # Do im2col trick once again
         k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
         X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
-        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
+        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1)
         # Here we just transposed X into columns, in the same way as in forward phase
         
         # here we sum up all errors, reshape them into matrix as well
@@ -213,15 +156,7 @@ class ConvLayer(object):
             dX = x_pad[:, :, self.padding:-self.padding, self.padding:-self.padding]
        
         return dW, db, dX
-        
-# class poollayer:
-#     # TODO
 
-#     def __init__(self):
-
-#     def forwardprop(self):
-
-#     def backprop(self):
 
 class ConvNet:
 
@@ -253,8 +188,11 @@ class ConvNet:
             outputs.append(cur_input)
 
         # the softmax layer, we subtract maximum to avoid overflow
-        cur_input = np.exp(cur_input - np.max(cur_input)) / np.exp(cur_input - np.max(cur_input)).sum()
-        outputs.append(cur_input)
+
+        # TODO: remove the comments!!!
+
+        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.exp(cur_input - np.max(cur_input)).sum() 
+        # outputs.append(cur_input)
 
         return outputs
 
@@ -361,29 +299,6 @@ class ConvNet:
             prediction = np.argmax(self.forward_pass(X)[-1])
             y_test.append(prediction)
         return np.array(y_test)
-
-        
-def get_data_fast(name):
-    #some problems with training labels, fix later
-    data_csv_path = Path('.').resolve().parent/"Data"/(name + ".csv")
-    data_pkl_path = data_csv_path.parent/(name+".pkl")
-    f = None
-    try:
-        with data_pkl_path.open('rb') as f:
-            data = pickle.load(f)
-    except (OSError, IOError) as e:
-        f = str(data_csv_path)
-        data = np.genfromtxt(fname = str(data_csv_path), delimiter = ",")
-        with data_csv_path.open('wb') as f:
-            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-    #data = data[:,:-1]
-    return data
-
-def vis_img(x):
-    """ Take image of dims [channels, h, w], show"""
-    img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    plt.imshow(img)
-    plt.show()
     
 
 def main():
@@ -499,11 +414,33 @@ def try_kaggle():
     #y_test = cnn.predict(X_test)
     #y_test.dump("Yte.dat")
 
+def test_poollayer():
+    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+    cnn = ConvNet()
+    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"})
+    img_1 = X_test[40,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    img_2 = X_test[41,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+
+    # vis_img(X_test[40,:])
+    plt.imshow(img_1)
+    plt.show()
+    plt.imshow(img_2)
+    plt.show()
+
+    X_out = cnn.forward_pass(np.array([img_1, img_2]))
+
+    # plt.imshow(X_out[])
+    # plt.show()
+    # vis_img(X_test[40,:])
+    # vis_img(X_out)
+
+
 
 if __name__ == "__main__":
-     main()
+    # main()
     # test_moons()
     # try_kaggle()
+    test_poollayer()
 
 
     
