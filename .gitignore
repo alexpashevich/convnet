@@ -1,1 +1,6 @@
 *.sw?
+*.pyc
+.DS_Store
+__pycache__/*
+read_file.py
+yann.py

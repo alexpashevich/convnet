@@ -1,6 +1,6 @@
-from utils import vis_img, get_data_fast, get_im2col_indices
+from utils import get_im2col_indices
 
-class poollayer:
+class PoolLayer(object):
 
 
     # TODO: add checks and asserts
@@ -35,10 +35,30 @@ class poollayer:
 
         # and finaly shape = n x d x (h/size) x (w/size)
         out = out.transpose(2, 3, 0, 1)
-        return out
+        return X_col
 
-    def backprop(self, output):
-        dA = np.zeros()
+    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
+        dA_col = np.zeros(cur_out_batch.shape)
+        error_batch_flat = error_batch.transpose(2, 3, 0, 1).ravel()
 
+        # 5x10x14x14 => 14x14x5x10, then flattened to 1x9800
+        # Transpose step is necessary to get the correct arrangement
+        # dout_flat = dout.transpose(2, 3, 0, 1).ravel()
+
+        # Fill the maximum index of each column with the gradient
+
+        # Essentially putting each of the 9800 grads
+        # to one of the 4 row in 9800 locations, one at each column
+        dA_col[self.last_max_ids, range(self.last_max_ids.size)] = error_batch
+
+        n, d, h, w = prev_out_batch.shape
+
+        # We now have the stretched matrix of 4x9800, then undo it with col2im operation
+        # dX would be 50x1x28x28
+        dA = col2im_indices(dA_col, (n * d, 1, h, w), self.size, self.size, padding=0, stride=self.stride)
+
+        # Reshape back to match the input dimension: 5x10x28x28
+        dA = dA.reshape(prev_out_batch.shape)
 
         self.last_max_ids = None
+        return None, None, dA # TODO: check if dW and db == None => do not do any update

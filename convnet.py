@@ -5,157 +5,32 @@ import math
 from pathlib import Path
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
-#from sklearn.model_selection import train_test_split
-from timeit import default_timer as timer
+from sklearn.model_selection import train_test_split
 # import tensorflow as tf
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+from timeit import default_timer as timer
 
 from utils import vis_img, get_data_fast, get_im2col_indices
-from fclayer import fclayer
-from poollayer import poollayer
+from fclayer import FCLayer
+from poollayer import PoolLayer
+from convlayer import ConvLayer
 
-
-def ReLU(input_array):
-    # rectified linear unit activation function
-    return np.maximum(input_array, 0)
 
 def CE_loss(y_true, y_pred):
     # cross entropy loss (multinomial regression)
     y_pred[y_pred < 1e-7] = 1e-7 # we clip values in order to prevent log of very small value
     return -np.sum(y_true * np.log(y_pred))
 
-def sigmoid(input_array): # not used now
-    # sigmoid activation function
-    return 1. / (1 + np.exp(-input_array))
+def CE_loss_batch(y_true_batch, y_pred_batch):
+    loss = 0
+    # y_pred_batch[y_pred_batch < 1e-7] = 1e-7 # we clip values in order to prevent log of very small value
+    for y_true, y_pred in zip(y_true_batch, y_pred_batch):
+        loss += CE_loss(y_true, y_pred)
+    return loss
 
 def square_loss(y_true, y_pred): # not used now
     # square loss
     return 1. / 2 * np.sum((y_true - y_pred) ** 2)
-
-
-class ConvLayer(object):
-    def __init__(self, W, b, stride=1, padding=0):
-        """
-        W - [out_channels, in_channels, height, width]
-        """
-        self.W = W
-        self.b = b
-        self.out_channels, self.in_channels, self.height, self.width = W.shape
-        self.stride = stride
-        self.padding = padding
-
-    def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
-        time = timer()
-        batch_size = X.shape[0]
-        output = np.zeros([batch_size, self.out_channels, out_height, out_width])
-        s = self.stride
-        for b in range(0, batch_size):
-            for k in range(0, self.out_channels):
-                for i in range(0, out_height):
-                    for j in range(0, out_width):
-                        output[b, k, i, j] = np.add(
-                                np.sum(np.multiply(
-                                        X[b, :, (i*s):(i*s+self.height), (j*s):(j*s+self.width)],
-                                        self.W[k, :, :, :]
-                                        )), 
-                                self.b[k]
-                                )
-        print('Slow thing computed in {:6f}'.format(timer() - time))
-        return output
-
-    def fast_fprop(self, X, out_height, out_width):
-        time = timer()
-        batch_size = X.shape[0]
-        in_channels = X.shape[1]
-        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
-        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
-        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1) 
-        W_col = self.W.reshape(self.out_channels, -1)
-        output = np.matmul(W_col, X_col) + np.expand_dims(self.b, 1)
-        output = output.reshape(self.out_channels, out_height, out_width, batch_size).transpose(3, 0, 1, 2)
-        print('Fast thing computed in {:6f}'.format(timer() - time))
-        return output
-        
-    def forwardprop(self, X, slow=False):
-        """
-        X - [batch_size, in_channels, in_height, in_width]
-        """
-        batch_size, in_channels, in_height, in_width = X.shape
-        out_height, out_width = self.get_output_dims(X)
-        
-        p = self.padding
-        if p == 0:
-            Xp = X
-        else:
-            Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
-        
-        # Vs = self.slow_fprop(Xp, out_height, out_width)
-        output = self.fast_fprop(Xp, out_height, out_width)
-        # print(np.mean(Vs-V))
-        
-#        if self.activation_type == "ReLU":
-#            out = ReLU(V)
-#        elif self.activation_type == "None":
-#            out = out # no activation
-#        else:
-#            print("error: unknown activation type")
-#            out = out
-        return ReLU(output)
-        #return output
-
-
-    def get_output_dims(self, X): # we need it because not every filter size can be applied
-        batch_size, in_channels, in_height, in_width = X.shape
-        assert in_channels == self.in_channels
-        assert (in_height - self.height + 2*self.padding) % self.stride == 0
-        assert (in_width - self.width + 2*self.padding) % self.stride == 0
-        out_height = (in_height - self.height + 2*self.padding) // self.stride + 1
-        out_width = (in_width - self.width + 2*self.padding) // self.stride + 1
-        return out_height, out_width
-        
-    def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        """
-        What shall we do here:
-        1. Compute derivative of activ. func. in cur_out_batch
-        2. Multiply transposed prev. weights (prev_out_batch) by error batch
-        3. Multiply 1 by 2              
-        """
-      #  if self.activation_type == "ReLU":
-        error_batch[cur_out_batch <= 0] = 0 # Step 1
-
-        X = prev_out_batch # previous output of the layer
-        batch_size, in_channels, in_height, in_width = X.shape
-        out_height, out_width = self.get_output_dims(X)
-        
-        # Do im2col trick once again
-        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
-        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
-        X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1)
-        # Here we just transposed X into columns, in the same way as in forward phase
-        
-        # here we sum up all errors, reshape them into matrix as well
-        db = np.sum(error_batch, axis=(0, 2, 3))
-        db = db.reshape(self.out_channels, -1)
-        
-        # Here - we reshape batch of errors in order to multiply it by weights
-        dout_reshaped = error_batch.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
-        dW = np.matmul(dout_reshaped, X_col.T)
-        dW = dW.reshape(self.W.shape)
-        W_reshape = self.W.reshape(self.out_channels, -1)
-        dX_col = W_reshape.T @ dout_reshaped
-        
-        # Reshape dX back
-        dX_reshaped = dX_col.reshape(self.in_channels * self.height * self.width, -1, batch_size).transpose(2, 0, 1)
-        h_pad, w_pad = in_height + 2*self.padding, in_width + 2*self.padding
-        x_pad = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
-        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped)
-        # remove padding (if any)
-        if self.padding == 0:
-            dX = x_pad
-        else:
-            dX = x_pad[:, :, self.padding:-self.padding, self.padding:-self.padding]
-       
-        return dW, db, dX
 
 
 class ConvNet:
@@ -167,13 +42,13 @@ class ConvNet:
     def add_layer(self, layer_type, layer_info):
         ''' add a layer to the NN '''
         if layer_type == "fclayer":
-            self.layers.append(fclayer(layer_info))
+            self.layers.append(FCLayer(layer_info))
             self.nb_layers += 1
         elif layer_type == "convlayer":
-            self.layers.append(convlayer(layer_info))
+            self.layers.append(ConvLayer(layer_info))
             self.nb_layers += 1
         elif layer_type == "poollayer":
-            self.layers.append(poollayer(layer_info))
+            self.layers.append(PoolLayer(layer_info))
             self.nb_layers += 1
         else:
             print("error: unknown layer type")
@@ -184,15 +59,20 @@ class ConvNet:
         outputs = []
         outputs.append(cur_input)
         for layer in self.layers:
+            if type(layer) is ConvLayer and len(cur_input.shape) < 4:
+                # X -> ConvLayer, we have to resize the input
+                cur_input = cur_input.reshape(-1, 3, 32, 32)
+
+            if type(layer) is FCLayer and len(cur_input.shape) > 2:
+                # ConvLayer -> FCLayer, we have to resize the input
+                cur_input = cur_input.reshape(-1, cur_input.shape[1] * cur_input.shape[2] * cur_input.shape[3])
+
             cur_input = layer.forwardprop(cur_input)
             outputs.append(cur_input)
 
         # the softmax layer, we subtract maximum to avoid overflow
-
-        # TODO: remove the comments!!!
-
-        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.exp(cur_input - np.max(cur_input)).sum() 
-        # outputs.append(cur_input)
+        cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        outputs.append(cur_input)
 
         return outputs
 
@@ -202,35 +82,57 @@ class ConvNet:
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
         for layer in reversed(self.layers):
+
+            # if type(layer) is ConvLayer:
+            #     type_name = "convlayer"
+            # else:
+            #     type_name = "fclayer"
+            # time = timer()
+
+            cur_out = np.array(outputs_batch[-i])
+            prev_out = np.array(outputs_batch[-1 - i])
+            if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
+                # print("reshaping for ConvLayer")
+                # layer is the last ConvLayer, we have to resize the input
+                errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
+
+            if type(layer) is ConvLayer and len(prev_out.shape) < 4:
+                # print("reshaping for ConvLayer")
+                # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
+                prev_out = prev_out.reshape(-1, 3, 32, 32)
+
+            if type(layer) is FCLayer and len(prev_out.shape) > 3:
+                # print("reshaping for FCLayer")
+                # layer is the first FC after convolutional layers, we have to reshape prev_out
+                prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
+
+
             # we skip the last output as it contains the final classification output
-            (dW, db, errors_batch) = layer.backprop(errors_batch, np.array(outputs_batch[-i]), np.array(outputs_batch[-1 - i]))
+            (dW, db, errors_batch) = layer.backprop(errors_batch, cur_out, prev_out)
             grad_W[-i] = dW # we use the returned order here in order to obtain the regular order in the end
             grad_b[-i] = db # the same here
             i += 1
+
+            # print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
 
         return grad_W, grad_b
 
     def get_minibatch_grads(self, X, Y):
         ''' return gradients with respect to W and b for a minibatch '''
-        loss = 0
-        errors_batch = []
-        # outputs = x + layers outputs => len = nb_layers + 1
+        # outputs_batch = x + layers outputs => len = nb_layers + 1
         # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
-        outputs_batch = [[] for _ in range(self.nb_layers + 1)]
+        # we do the forward_pass for the whole batch at once
+        time = timer()
+        outputs_batch = self.forward_pass(X)
+        # print('forward_pass computed in {:6f}'.format(timer() - time))
 
-        # we do the forward_pass and stack all the outputs in the right order
-        for x, y in zip(X, Y):
-            outputs = self.forward_pass(x)
+        # we get the errors for the whole batch at once
+        errors_batch = outputs_batch[-1] - Y
+        loss = CE_loss_batch(Y, outputs_batch[-1])
 
-            errors = outputs[-1] - y
-            # TODO: redo everything with fancy numpy functions instead of ugly loops
-            for i in range(self.nb_layers + 1):
-                outputs_batch[i].append(outputs[i])
-            errors_batch.append(errors)
-            loss += CE_loss(y, outputs[-1])
-
-        grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch)
-
+        time = timer()
+        grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
+        # print('backward_pass computed in {:6f}'.format(timer() - time))
         return grads_W, grads_b, loss
 
 
@@ -261,6 +163,7 @@ class ConvNet:
                 y_minibatch = y_train_vector[i:i + minibatch_size]
 
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
+
                 loss += minibatch_loss
 
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
@@ -299,7 +202,7 @@ class ConvNet:
             prediction = np.argmax(self.forward_pass(X)[-1])
             y_test.append(prediction)
         return np.array(y_test)
-    
+
 
 def main():
     # Playing with data
@@ -342,17 +245,32 @@ def main():
     silly_loss = conv2-er1_
     tfgrad = tf.gradients(silly_loss, W_)
 
+    # more grads
+    opt = tf.train.AdagradOptimizer(0.1)
+    grads = opt.compute_gradients(silly_loss)
+
     with tf.Session() as sess:
         with tf.device('/cpu:0'):
             sess.run(tf.global_variables_initializer())
-            V_, B_, loss_ = sess.run([conv2, tfgrad, silly_loss], feed_dict={
+            V_, B_, loss_, grads_ = sess.run([conv2, tfgrad, silly_loss, grads], feed_dict={
                 ibatch_:tf_input_batch.astype('float32'),
                 er1_: tf_er1.astype('float32')})
 
-    tf_conv_mistake = np.mean(V.transpose(0, 2, 3, 1) - V_)
-    tf_grad_mistake = np.mean(W1.transpose(2, 3, 1, 0) - B_)
-    print('conv_mistake = {}'.format(tf_conv_mistake))
-    print('grad_mistake = {}'.format(tf_grad_mistake))
+    print('TF_conv_mistake = {}'.format(np.mean(V.transpose(0, 2, 3, 1) - V_)))
+    print('TF_grad_mistake = {}'.format(np.mean(B[0].transpose(2, 3, 1, 0) - B_)))
+    print('TF_grad_sum  = {} {}'.format(np.sum(B[0].transpose(2, 3, 1, 0)), np.sum(B_)))
+    
+    # Hipsternet
+    import sys
+    sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
+    import hipsternet.layer as hl
+    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 0)
+    OUT = hl.conv_backward(out - er1, cache)
+
+    print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
+    print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
+    print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
+    
 
     # plt.imshow(V[:, :, 3])
 
@@ -434,13 +352,64 @@ def test_poollayer():
     # vis_img(X_test[40,:])
     # vis_img(X_out)
 
+def test_cnn():
+    X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
+    y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
+    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+
+    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+
+    # vis_img(X_test[40,:])
+
+    print(X_train.shape)
+    print(y_train.shape)
+    print(X_cv.shape)
+    print(y_cv.shape)
+    print(X_test.shape)
+
+    nb_features = 32 * 32 * 3
+    nb_classes = 10
+
+    ch1 = 24
+    ch2 = 16
+    ch3 = 8
+    sizeFC1 = 200
+
+    cnn = ConvNet()
+    cnn.add_layer("convlayer", layer_info = {"in_channels": 3,
+                                             "out_channels": ch1,
+                                             "height": 5,
+                                             "width": 5,
+                                             "stride": 1,
+                                             "padding": 0,
+                                             "activation_type": "ReLU"})
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
+                                             "out_channels": ch2,
+                                             "height": 3,
+                                             "width": 3,
+                                             "stride": 1,
+                                             "padding": 0,
+                                             "activation_type": "ReLU"})
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+                                             "out_channels": ch3,
+                                             "height": 3,
+                                             "width": 3,
+                                             "stride": 1,
+                                             "padding": 0,
+                                             "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": ch3 * 24 * 24, "output_size": sizeFC1, "activation_type": "ReLU"})
+    cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
+
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
 
 
 if __name__ == "__main__":
+    # np.random.seed(500)
     # main()
     # test_moons()
     # try_kaggle()
-    test_poollayer()
+    # test_poollayer()
+    test_cnn()
 
 
     
