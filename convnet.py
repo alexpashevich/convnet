@@ -7,7 +7,7 @@ from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
 # import tensorflow as tf
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
 from utils import vis_img, get_data_fast, get_im2col_indices
@@ -71,8 +71,11 @@ class ConvNet:
             outputs.append(cur_input)
 
         # the softmax layer, we subtract maximum to avoid overflow
-        cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
-        outputs.append(cur_input)
+
+        # TODO: remove comments below
+
+        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        # outputs.append(cur_input)
 
         return outputs
 
@@ -336,19 +339,21 @@ def test_poollayer():
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
     cnn = ConvNet()
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"})
-    img_1 = X_test[40,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    img_2 = X_test[41,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    img_1 = X_test[0,:].reshape(3, 32, 32)
+    img_2 = X_test[4,:].reshape(3, 32, 32)
 
     # vis_img(X_test[40,:])
-    plt.imshow(img_1)
-    plt.show()
-    plt.imshow(img_2)
-    plt.show()
 
-    X_out = cnn.forward_pass(np.array([img_1, img_2]))
+    X_out = cnn.forward_pass(np.array([img_1, img_2]))[1]
 
-    # plt.imshow(X_out[])
-    # plt.show()
+    print(X_out.shape)
+    # X_out = X_out.reshape(2, -1)
+    # X_out_1 = X_out[1]
+    img1 = X_out[0,:,:,:].transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    print(img1.shape)
+    plt.imshow(img1)
+
+    plt.show()
     # vis_img(X_test[40,:])
     # vis_img(X_out)
 
