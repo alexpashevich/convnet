@@ -1,19 +1,20 @@
 import numpy as np
 import pandas as pd
-import pickle
 import math
-from pathlib import Path
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
-# import tensorflow as tf
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
-from utils import vis_img, get_data_fast, get_im2col_indices
+from utils import vis_img, get_data_fast, get_im2col_indices, start_logging, log_to_file 
 from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
+
+import logging
+LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
+                            "%Y-%m-%d %H:%M:%S")
 
 
 def CE_loss(y_true, y_pred):
@@ -86,29 +87,28 @@ class ConvNet:
         grad_b = len(self.layers) * [None]
         for layer in reversed(self.layers):
 
-            # if type(layer) is ConvLayer:
-            #     type_name = "convlayer"
-            # else:
-            #     type_name = "fclayer"
-            # time = timer()
+            if type(layer) is ConvLayer:
+                 type_name = "convlayer"
+            else:
+                type_name = "fclayer"
+            time = timer()
 
             cur_out = np.array(outputs_batch[-i])
             prev_out = np.array(outputs_batch[-1 - i])
             if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
-                # print("reshaping for ConvLayer")
+                print("reshaping for ConvLayer")
                 # layer is the last ConvLayer, we have to resize the input
                 errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
 
             if type(layer) is ConvLayer and len(prev_out.shape) < 4:
-                # print("reshaping for ConvLayer")
+                print("reshaping for ConvLayer")
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
                 prev_out = prev_out.reshape(-1, 3, 32, 32)
 
             if type(layer) is FCLayer and len(prev_out.shape) > 3:
-                # print("reshaping for FCLayer")
+                print("reshaping for FCLayer")
                 # layer is the first FC after convolutional layers, we have to reshape prev_out
                 prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
-
 
             # we skip the last output as it contains the final classification output
             (dW, db, errors_batch) = layer.backprop(errors_batch, cur_out, prev_out)
@@ -116,7 +116,7 @@ class ConvNet:
             grad_b[-i] = db # the same here
             i += 1
 
-            # print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
+            print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
 
         return grad_W, grad_b
 
@@ -127,7 +127,7 @@ class ConvNet:
         # we do the forward_pass for the whole batch at once
         time = timer()
         outputs_batch = self.forward_pass(X)
-        # print('forward_pass computed in {:6f}'.format(timer() - time))
+        print('forward_pass computed in {:6f}'.format(timer() - time))
 
         # we get the errors for the whole batch at once
         errors_batch = outputs_batch[-1] - Y
@@ -135,7 +135,7 @@ class ConvNet:
 
         time = timer()
         grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
-        # print('backward_pass computed in {:6f}'.format(timer() - time))
+        print('backward_pass computed in {:6f}'.format(timer() - time))
         return grads_W, grads_b, loss
 
 
@@ -166,7 +166,6 @@ class ConvNet:
                 y_minibatch = y_train_vector[i:i + minibatch_size]
 
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
-
                 loss += minibatch_loss
 
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
@@ -184,7 +183,6 @@ class ConvNet:
                                               step_size / np.sqrt(E_g_b[i] + epsilon) * grads_b[i])
 
             print("Loss = %f" % (loss / X_train.shape[0]))
-
 
             if X_cv is not None and y_cv is not None:
                 y_cv_vector = np.zeros((y_cv.shape[0], K))
@@ -234,6 +232,7 @@ def main():
     # LOSS: like inputs
     tf_er1 = er1.transpose(0, 2, 3, 1)
 
+    import tensorflow as tf
     # Convolution
     ibatch_ = tf.placeholder(tf.float32, shape=tf_input_batch.shape)
     W_ = tf.Variable(initial_value=tf_W1, dtype=tf.float32)
@@ -358,9 +357,13 @@ def test_poollayer():
     # vis_img(X_out)
 
 def test_cnn():
-    X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
-    y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
-    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+    # X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
+    # y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
+    # X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+
+    X_train_full = get_data_fast("Xtr")[:,:-1]
+    X_test = get_data_fast("Xte")[:,:-1]
+    y_train_full = get_data_fast("Ytr")[:,1]
 
     X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
 
@@ -404,11 +407,16 @@ def test_cnn():
                                              "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": ch3 * 24 * 24, "output_size": sizeFC1, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
+    import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
     cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
 
 
 if __name__ == "__main__":
+    log = start_logging()
+    log_to_file()
+
+    
     # np.random.seed(500)
     # main()
     # test_moons()

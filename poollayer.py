@@ -109,7 +109,7 @@ class PoolLayer(object):
 
         # fill the maximum index of each column with the gradient, the rest stays zero
         dA_col[self.last_max_ids, range(self.last_max_ids.size)] = dout_flat
-
+               
         n, d, h, w = prev_out_batch.shape
 
         # some more suffisticated reshaping
