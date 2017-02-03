@@ -15,6 +15,9 @@ from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
 
+import warnings
+from scipy.cluster.vq import whiten
+
 
 def CE_loss(y_true, y_pred):
     # cross entropy loss (multinomial regression)
@@ -71,7 +74,15 @@ class ConvNet:
             outputs.append(cur_input)
 
         # the softmax layer, we subtract maximum to avoid overflow
-        cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        # print(cur_input)
+        # print(cur_input.shape)
+
+        try:
+            cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        except Warning as e:
+            print(e)
+            print(np.exp(cur_input - np.max(cur_input)))
+
         outputs.append(cur_input)
 
         return outputs
@@ -129,6 +140,7 @@ class ConvNet:
         # we get the errors for the whole batch at once
         errors_batch = outputs_batch[-1] - Y
         loss = CE_loss_batch(Y, outputs_batch[-1])
+        print("get_minibatch_grads loss = ", loss)
 
         time = timer()
         grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
@@ -164,21 +176,26 @@ class ConvNet:
 
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
 
+                if i == 0 or i == 5000:
+                    print("grads_W = ", grads_W)
+                    print("W = ", [layer.W for layer in self.layers])
+
                 loss += minibatch_loss
 
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
-                for i in range(self.nb_layers):
-                    E_g_W[i] = gamma * E_g_W[i] + (1 - gamma) * (grads_W[i] ** 2)
-                    E_g_b[i] = gamma * E_g_b[i] + (1 - gamma) * (grads_b[i] ** 2)
+                for j in range(self.nb_layers):
+                    E_g_W[j] = gamma * E_g_W[j] + (1 - gamma) * (grads_W[j] ** 2)
+                    E_g_b[j] = gamma * E_g_b[j] + (1 - gamma) * (grads_b[j] ** 2)
 
                 # do gradient step for every layer
-                for i in range(self.nb_layers):
+                for j in range(self.nb_layers):
                     if use_vanila_sgd:
-                        self.layers[i].update(step_size * grads_W[i], step_size * grads_b[i])
+                        self.layers[j].update(step_size * grads_W[j], step_size * grads_b[j])
                     else:
                         # do RMSprop step
-                        self.layers[i].update(step_size / np.sqrt(E_g_W[i] + epsilon) * grads_W[i],
-                                              step_size / np.sqrt(E_g_b[i] + epsilon) * grads_b[i])
+                        self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
+                                              step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
+                print("%d out of %d done" % (i, X_train.shape[0]))
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
@@ -352,20 +369,12 @@ def test_poollayer():
     # vis_img(X_test[40,:])
     # vis_img(X_out)
 
-def test_cnn():
-    X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
-    y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
-    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
-
-    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
-
-    # vis_img(X_test[40,:])
-
+def run_cnn(X_train, X_cv, y_train, y_cv):
     print(X_train.shape)
     print(y_train.shape)
     print(X_cv.shape)
     print(y_cv.shape)
-    print(X_test.shape)
+    # print(X_test.shape)
 
     nb_features = 32 * 32 * 3
     nb_classes = 10
@@ -400,16 +409,90 @@ def test_cnn():
     cnn.add_layer("fclayer", layer_info = {"input_size": ch3 * 24 * 24, "output_size": sizeFC1, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
 
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30, use_vanila_sgd=True)
 
+def fit_kaggle_data():
+    X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
+    y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
+    X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+
+    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+
+    # vis_img(X_test[40,:])
+
+    run_cnn(X_train, X_cv, y_train, y_cv)
+
+def whitening(data):
+    nb_channels = 3
+    channel_length = data.shape[1] / nb_channels
+    # means = np.zeros(nb_chanels)
+    # for d in data:
+    #     for ch in range(nb_channels):
+    #         for i in range(channel_length):
+    #             means[ch] += d[ch * channel_length + i]
+    # means /= data.shape[0] * channel_length
+
+    # sigmas = np.zeros(nb_channels)
+    # for d in data:
+    #     for ch in range(nb_channels):
+    #         for i in range(channel_length):
+    #             sigmas += (d[ch * channel_length + i] - means[ch]) ** 2
+    # sigmas /= data.shape[0] * channel_length
+
+    # for ch in range(nb_channels):
+    #     data[:, ch * channel_length: (ch + 1) * channel_length] = (data[:, ch * channel_length: (ch + 1) * channel_length] - means[ch]) / 
+    # print("mean before ", data[:, 0:1024].var())
+
+    r_data = whiten(data[:, 0:1024])
+    g_data = whiten(data[:, 1024:2048])
+    b_data = whiten(data[:, 2048:3072])
+
+    # print("mean after ", r_data.var())
+    # print(r_data)
+
+    # features  = np.array([[1.9, 2.3, 1.7],[1.5, 2.5, 2.2],[0.8, 0.6, 1.7,]])
+    # print("mean before ", features.var())
+    # new_features = whiten(features)
+    # print("mean after ", new_features.var())
+
+    return np.concatenate((r_data, g_data, b_data), axis=1)
+
+
+    # return data
+
+def unpickle(file):
+    import _pickle as cPickle
+    fo = open(file, 'rb')
+    dict = cPickle.load(fo, encoding ='bytes')
+    fo.close()
+    return dict
+
+def fit_orig_cifar():
+    data = unpickle("../cifar_orig/data_batch_5")
+    X = data[b'data']
+    y = np.array(data[b'labels'])
+
+    print(X.shape)
+
+    X_white = whitening(X)
+
+    print(X_white.shape)
+
+    X_train, X_cv, y_train, y_cv = train_test_split(X_white, y, test_size = 0.05)
+
+    run_cnn(X_train, X_cv, y_train, y_cv)
 
 if __name__ == "__main__":
+
+    # np.seterr(all='raise')
+    warnings.filterwarnings('error')
     # np.random.seed(500)
     # main()
     # test_moons()
     # try_kaggle()
     # test_poollayer()
-    test_cnn()
+    # fit_kaggle_data()
+    fit_orig_cifar()
 
 
     
