@@ -1,22 +1,22 @@
 import numpy as np
 import pandas as pd
-import pickle
 import math
-from pathlib import Path
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
-# import tensorflow as tf
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
-from utils import vis_img, get_data_fast, get_im2col_indices
+from utils import vis_img, get_data_fast, get_im2col_indices, start_logging, log_to_file 
 from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
 
-import warnings
-from scipy.cluster.vq import whiten
+# import warnings
+# from scipy.cluster.vq import whiten
+import logging
+LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
+                            "%Y-%m-%d %H:%M:%S")
 
 
 def CE_loss(y_true, y_pred):
@@ -85,6 +85,11 @@ class ConvNet:
 
         outputs.append(cur_input)
 
+        # TODO: remove comments below
+
+        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        # outputs.append(cur_input)
+
         return outputs
 
     def backward_pass(self, errors_batch, outputs_batch):
@@ -94,29 +99,28 @@ class ConvNet:
         grad_b = len(self.layers) * [None]
         for layer in reversed(self.layers):
 
-            # if type(layer) is ConvLayer:
-            #     type_name = "convlayer"
-            # else:
-            #     type_name = "fclayer"
-            # time = timer()
+            if type(layer) is ConvLayer:
+                 type_name = "convlayer"
+            else:
+                type_name = "fclayer"
+            time = timer()
 
             cur_out = np.array(outputs_batch[-i])
             prev_out = np.array(outputs_batch[-1 - i])
             if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
-                # print("reshaping for ConvLayer")
+                print("reshaping for ConvLayer")
                 # layer is the last ConvLayer, we have to resize the input
                 errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
 
             if type(layer) is ConvLayer and len(prev_out.shape) < 4:
-                # print("reshaping for ConvLayer")
+                print("reshaping for ConvLayer")
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
                 prev_out = prev_out.reshape(-1, 3, 32, 32)
 
             if type(layer) is FCLayer and len(prev_out.shape) > 3:
-                # print("reshaping for FCLayer")
+                print("reshaping for FCLayer")
                 # layer is the first FC after convolutional layers, we have to reshape prev_out
                 prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
-
 
             # we skip the last output as it contains the final classification output
             (dW, db, errors_batch) = layer.backprop(errors_batch, cur_out, prev_out)
@@ -199,7 +203,6 @@ class ConvNet:
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
-
             if X_cv is not None and y_cv is not None:
                 y_cv_vector = np.zeros((y_cv.shape[0], K))
                 for i in range(y_cv.shape[0]):
@@ -248,6 +251,7 @@ def main():
     # LOSS: like inputs
     tf_er1 = er1.transpose(0, 2, 3, 1)
 
+    import tensorflow as tf
     # Convolution
     ibatch_ = tf.placeholder(tf.float32, shape=tf_input_batch.shape)
     W_ = tf.Variable(initial_value=tf_W1, dtype=tf.float32)
@@ -353,23 +357,37 @@ def test_poollayer():
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
     cnn = ConvNet()
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"})
-    img_1 = X_test[40,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    img_2 = X_test[41,:].reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    img_1 = X_test[0,:].reshape(3, 32, 32)
+    img_2 = X_test[4,:].reshape(3, 32, 32)
 
     # vis_img(X_test[40,:])
-    plt.imshow(img_1)
-    plt.show()
-    plt.imshow(img_2)
-    plt.show()
 
-    X_out = cnn.forward_pass(np.array([img_1, img_2]))
+    X_out = cnn.forward_pass(np.array([img_1, img_2]))[1]
 
-    # plt.imshow(X_out[])
-    # plt.show()
+    print(X_out.shape)
+    # X_out = X_out.reshape(2, -1)
+    # X_out_1 = X_out[1]
+    img1 = X_out[0,:,:,:].transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    print(img1.shape)
+    plt.imshow(img1)
+
+    plt.show()
     # vis_img(X_test[40,:])
     # vis_img(X_out)
 
 def run_cnn(X_train, X_cv, y_train, y_cv):
+    # X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
+    # y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
+    # X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
+
+    X_train_full = get_data_fast("Xtr")[:,:-1]
+    X_test = get_data_fast("Xte")[:,:-1]
+    y_train_full = get_data_fast("Ytr")[:,1]
+
+    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+
+    # vis_img(X_test[40,:])
+
     print(X_train.shape)
     print(y_train.shape)
     print(X_cv.shape)
@@ -408,6 +426,7 @@ def run_cnn(X_train, X_cv, y_train, y_cv):
                                              "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": ch3 * 24 * 24, "output_size": sizeFC1, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
+    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
     cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30, use_vanila_sgd=True)
 
@@ -485,13 +504,16 @@ def fit_orig_cifar():
 if __name__ == "__main__":
 
     # np.seterr(all='raise')
-    warnings.filterwarnings('error')
+    # warnings.filterwarnings('error')
+    # log = start_logging()
+    # log_to_file()
+
     # np.random.seed(500)
     # main()
     # test_moons()
     # try_kaggle_fcnn()
     # test_poollayer()
-    # fit_kaggle_data()
+    fit_kaggle_data()
     # fit_orig_cifar()
 
 

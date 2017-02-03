@@ -1,6 +1,11 @@
+import logging
 import numpy as np
 from timeit import default_timer as timer
 from utils import get_im2col_indices, ReLU
+
+log = logging.getLogger(__name__)
+
+
 
 class ConvLayer(object):
     def __init__(self, layer_info): # W, b, stride=1, padding=0):
@@ -52,7 +57,7 @@ class ConvLayer(object):
         X - [batch_size, in_channels, in_height, in_width]
         """
         # print("[ConvLayer] X.shape = ", X.shape)
-
+        
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
         
@@ -97,6 +102,7 @@ class ConvLayer(object):
         # print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
         # print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
         # print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
+        # import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
@@ -130,7 +136,7 @@ class ConvLayer(object):
         dX_reshaped = dX_col.reshape(self.in_channels * self.height * self.width, -1, batch_size).transpose(2, 0, 1)
         h_pad, w_pad = in_height + 2*self.padding, in_width + 2*self.padding
         x_pad = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
-        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped)
+        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped)          # SLOW THING!
         x_pad_alt = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
         x_pad_alt[:, k, i, j] = dX_reshaped
         # remove padding (if any)
