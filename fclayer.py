@@ -1,8 +1,5 @@
-import logging
 import numpy as np
 from utils import ReLU
-
-log = logging.getLogger(__name__)
 
 
 class FCLayer(object):
@@ -33,14 +30,13 @@ class FCLayer(object):
         else:
             print("error: unknown activation type")
             out = out
-        # print("[FCLayer] output.shape = ", out.shape) 
+        # print("[FCLayer] output.shape = ", out.shape)
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        # print("[FCLayer_back] error_batch.shape = ", error_batch.shape)
-        # print("[FCLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("[FCLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
-        # import pudb; pudb.set_trace()  # XXX BREAKPOINT
+    #     print("[FCLayer_back] error_batch.shape = ", error_batch.shape)
+    #     print("[FCLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
+    #     print("[FCLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
 
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0

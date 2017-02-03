@@ -1,19 +1,17 @@
-import logging
 import numpy as np
-import pickle
 import matplotlib.pyplot as plt
 from pathlib import Path
-from datetime import datetime
-
-log = logging.getLogger(__name__)
+import pickle
 
 def ReLU(input_array):
     # rectified linear unit activation function
     return np.maximum(input_array, 0)
 
+
 def sigmoid(input_array): # not used now
     # sigmoid activation function
     return 1. / (1 + np.exp(-input_array))
+
 
 def vis_img(x):
     """ Take image of dims [channels, h, w], show"""
@@ -26,17 +24,13 @@ def get_data_fast(name):
     data_csv_path = Path('.').resolve().parent/"data"/(name + ".csv")
     data_pkl_path = data_csv_path.parent/(name+".pkl")
     if data_pkl_path.exists():
-        log.debug('Picklefile {} exists, loading it'.format(data_pkl_path))
         with data_pkl_path.open('rb') as f:
             data = pickle.load(f)
     else:
-        log.info('Picklefile {} does not exist, loading csv file'.format(data_csv_path))
         data = np.genfromtxt(fname = str(data_csv_path), skip_header = True if name == "Ytr" else False, delimiter = ",")
         with data_pkl_path.open('wb') as f:
-            log.info('Saving picklefile {}'.format(data_pkl_path))
             pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
     return data
-    # except (OSError, IOError) as e:
 
 """
 im2col trick
@@ -56,31 +50,3 @@ def get_im2col_indices(in_channels, height, width, out_height, out_width, stride
     i = i.astype(int)
     j = j.astype(int)
     return k, i, j
-
-
-def start_logging():
-    LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
-                            "%Y-%m-%d %H:%M:%S")
-    logger = logging.getLogger()
-    handler = logging.StreamHandler()
-    handler.setFormatter(LOG_FORMATTER)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    logger.setLevel(logging.DEBUG)
-    return logger
-
-def log_to_file():
-    LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
-                            "%Y-%m-%d %H:%M:%S")
-    logfilename = Path('.').resolve().parent/'logs'/datetime.now().strftime('%Y-%m-%d_%H-%M-%S.log')
-    out_filehandler = logging.FileHandler(str(logfilename))
-    out_filehandler.setFormatter(LOG_FORMATTER)
-    log.addHandler(out_filehandler)
-
-
-
-
-
-
-
-    

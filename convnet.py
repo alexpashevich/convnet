@@ -4,19 +4,19 @@ import math
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
+# import tensorflow as tf
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
-from utils import vis_img, get_data_fast, get_im2col_indices, start_logging, log_to_file 
+from utils import vis_img, get_data_fast, get_im2col_indices 
 from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
 
 # import warnings
 # from scipy.cluster.vq import whiten
-import logging
-LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
-                            "%Y-%m-%d %H:%M:%S")
+# import logging
+# LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s","%Y-%m-%d %H:%M:%S")
 
 
 def CE_loss(y_true, y_pred):
@@ -100,7 +100,7 @@ class ConvNet:
         for layer in reversed(self.layers):
 
             if type(layer) is ConvLayer:
-                 type_name = "convlayer"
+                type_name = "convlayer"
             else:
                 type_name = "fclayer"
             time = timer()
@@ -153,7 +153,7 @@ class ConvNet:
 
 
     def fit(self, X_train, y_train, K, minibatch_size, n_iter,
-            X_cv = None, y_cv = None, step_size = 0.01, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False):
+            X_cv = None, y_cv = None, step_size = 0.001, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = True):
         ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
@@ -223,25 +223,50 @@ class ConvNet:
             y_test.append(prediction)
         return np.array(y_test)
 
-
 def main():
-    # Playing with data
-    xtr = get_data_fast("Xtr")[:,:-1]
-    # xte = get_data_fast("Xte")[:,:,-1]
-    # ytr = get_data_fast("Ytr")
-    # Traspose img to [batch_size, channels, im_height, im_width]
-    # Building net
-    xtr = xtr.reshape(-1, 3, 32, 32)
-    W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
-    b1 = np.ones([12]) * 0.1
-    cv1 = ConvLayer(W1, b1)
-    #
-    input_batch = xtr[:3, :, :, :]
-    # Doing forward pass
-    V = cv1.forwardprop(input_batch) 
-    er1 = np.random.random(V.shape)
-    B = cv1.backprop(V-er1, V, input_batch)
+    X_train_full = get_data_fast("Xtr")[:,:-1]
+    X_test = get_data_fast("Xte")[:,:-1]
+    y_train_full = get_data_fast("Ytr")[:,1]
+    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
+                
+    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+                    
+    ch1 = 12
 
+    cnn = ConvNet()
+    cnn.add_layer("convlayer", layer_info = {"in_channels": 3,
+                                             "out_channels": ch1,
+                                             "height": 5,
+                                             "width": 5,
+                                             "stride": 1,
+                                             "padding": 1,
+                                             "activation_type": "None"})
+
+    np.random.seed(100)
+    xtr_res = X_train.reshape(-1, 3, 32,32)
+    input_batch = xtr_res[:3, :, :, :]
+    V = cnn.layers[0].forwardprop(input_batch)
+    # Traspose img to [batch_size, channels, im_height, im_width]
+    # W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
+    
+    W1 = np.ones((12,3,5,5)) * 0.01
+    b1 = np.ones([12]) * 0.01
+    # Doing forward pass
+    er1 = np.random.random(V.shape)
+    B = cnn.layers[0].backprop(V-er1, V, input_batch)
+
+    import sys
+    sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
+    import hipsternet.layer as hl
+    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 1)
+    OUT = hl.conv_backward(out - er1, cache)
+
+    print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
+    print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
+    print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
+    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
+
+    sys.exit()
 
     # TENSORFLOW RELATED STUFF
     # INPUTS: batch|channels|height|width --> batch|height|width|channels
@@ -267,7 +292,7 @@ def main():
     tfgrad = tf.gradients(silly_loss, W_)
 
     # more grads
-    opt = tf.train.AdagradOptimizer(0.1)
+    opt = tf.train.GradientDescentOptimizer(0.1)
     grads = opt.compute_gradients(silly_loss)
 
     with tf.Session() as sess:
@@ -280,18 +305,9 @@ def main():
     print('TF_conv_mistake = {}'.format(np.mean(V.transpose(0, 2, 3, 1) - V_)))
     print('TF_grad_mistake = {}'.format(np.mean(B[0].transpose(2, 3, 1, 0) - B_)))
     print('TF_grad_sum  = {} {}'.format(np.sum(B[0].transpose(2, 3, 1, 0)), np.sum(B_)))
-    
-    # Hipsternet
-    import sys
-    sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
-    import hipsternet.layer as hl
-    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 0)
-    OUT = hl.conv_backward(out - er1, cache)
+   
+   # Hipsternet
 
-    print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
-    print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
-    print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
-    
 
     # plt.imshow(V[:, :, 3])
 
@@ -397,9 +413,9 @@ def run_cnn(X_train, X_cv, y_train, y_cv):
     nb_features = 32 * 32 * 3
     nb_classes = 10
 
-    ch1 = 24
-    ch2 = 16
-    ch3 = 8
+    ch1 = 12#*2
+    ch2 = 8#*2
+    ch3 = 4#*2
     sizeFC1 = 200
 
     cnn = ConvNet()
@@ -416,7 +432,7 @@ def run_cnn(X_train, X_cv, y_train, y_cv):
                                              "width": 3,
                                              "stride": 1,
                                              "padding": 0,
-                                             "activation_type": "ReLU"})
+                                            "activation_type": "ReLU"})
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
                                              "out_channels": ch3,
                                              "height": 3,
@@ -510,11 +526,12 @@ if __name__ == "__main__":
 
     # np.random.seed(500)
     # main()
-    # test_moons()
+    test_moons()
     # try_kaggle_fcnn()
     # test_poollayer()
-    fit_kaggle_data()
+    # fit_kaggle_data()
     # fit_orig_cifar()
+
 
 
     
