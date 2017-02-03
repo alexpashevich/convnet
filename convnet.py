@@ -77,11 +77,11 @@ class ConvNet:
         # print(cur_input)
         # print(cur_input.shape)
 
-        try:
-            cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
-        except Warning as e:
-            print(e)
-            print(np.exp(cur_input - np.max(cur_input)))
+        # try:
+        cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        # except Warning as e:
+            # print(e)
+            # print(np.exp(cur_input - np.max(cur_input)))
 
         outputs.append(cur_input)
 
@@ -140,7 +140,7 @@ class ConvNet:
         # we get the errors for the whole batch at once
         errors_batch = outputs_batch[-1] - Y
         loss = CE_loss_batch(Y, outputs_batch[-1])
-        print("get_minibatch_grads loss = ", loss)
+        # print("get_minibatch_grads loss = ", loss)
 
         time = timer()
         grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
@@ -176,9 +176,9 @@ class ConvNet:
 
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
 
-                if i == 0 or i == 5000:
-                    print("grads_W = ", grads_W)
-                    print("W = ", [layer.W for layer in self.layers])
+                # if i == 0 or i == 5000:
+                    # print("grads_W = ", grads_W)
+                    # print("W = ", [layer.W for layer in self.layers])
 
                 loss += minibatch_loss
 
@@ -195,7 +195,7 @@ class ConvNet:
                         # do RMSprop step
                         self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
                                               step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
-                print("%d out of %d done" % (i, X_train.shape[0]))
+                # print("%d out of %d done" % (i, X_train.shape[0]))
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
@@ -313,7 +313,7 @@ def test_moons():
     accs = (y_pred == Y_test).sum() / Y_test.size
     print('Mean accuracy: %f' % accs)
 
-def try_kaggle():
+def try_kaggle_fcnn():
     X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
     y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
@@ -489,10 +489,10 @@ if __name__ == "__main__":
     # np.random.seed(500)
     # main()
     # test_moons()
-    # try_kaggle()
+    # try_kaggle_fcnn()
     # test_poollayer()
     # fit_kaggle_data()
-    fit_orig_cifar()
+    # fit_orig_cifar()
 
 
     
