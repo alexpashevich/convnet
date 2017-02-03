@@ -12,9 +12,11 @@ class ConvLayer(object):
         self.stride = layer_info["stride"]
         self.padding = layer_info["padding"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
-        self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
-        self.b = np.random.randn(self.out_channels) * 0.01
-
+        # self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
+        # self.b = np.random.randn(self.out_channels) * 0.01
+        self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
+        self.b = np.ones(self.out_channels)*0.01
+        
     def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
         time = timer()
         batch_size = X.shape[0]
@@ -60,7 +62,7 @@ class ConvLayer(object):
         if p == 0:
             Xp = X
         else:
-            Xp = np.pad(X, ((0, 0), (p, p), (p, p)), mode='constant')
+            Xp = np.pad(X, ((0, 0), (0,0), (p, p), (p, p)), mode='constant')
         
         output = self.fast_fprop(Xp, out_height, out_width)
         
@@ -71,9 +73,7 @@ class ConvLayer(object):
         else:
             print("error: unknown activation type")
             output = output
-
         # print("[ConvLayer] output.shape = ", output.shape)
-
         return output
 
 
@@ -85,7 +85,22 @@ class ConvLayer(object):
         out_height = (in_height - self.height + 2*self.padding) // self.stride + 1
         out_width = (in_width - self.width + 2*self.padding) // self.stride + 1
         return out_height, out_width
-        
+
+    def get_im2col_ind(self, X):
+        out_height, out_width = self.get_output_dims(X)
+        i0 = np.repeat(np.arange(self.height), self.width) 
+        i0 = np.tile(i0, self.in_channels)
+        i1 = self.stride * np.repeat(np.arange(out_height), out_width)
+        j0 = np.tile(np.arange(self.width), self.height * self.in_channels)
+        j1 = self.stride * np.tile(np.arange(out_width), out_height)
+        i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+        j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+        k = np.repeat(np.arange(self.in_channels), self.height * self.width).reshape(-1, 1)
+        k = k.astype(int)
+        i = i.astype(int)
+        j = j.astype(int)
+        return k, i, j
+            
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
         """
         What shall we do here:
@@ -94,10 +109,10 @@ class ConvLayer(object):
         3. Multiply 1 by 2              
         """
 
-        # print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
-        # print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
-
+        print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
+        print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
+        print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
+        
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
         elif self.activation_type != "None":
@@ -106,33 +121,44 @@ class ConvLayer(object):
         X = prev_out_batch # previous output of the layer
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
-        #import pudb; pudb.set_trace()  # XXX BREAKPOINT
+       
+        # import pudb; pudb.set_trace()  # XXX BREAKPOINT
         
-        # Do im2col trick once again
-        k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
-        X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
+        # Try with this function:
+        k, i, j = self.get_im2col_ind(X)
+        p = self.padding
+        if p == 0:
+            Xp = X
+        else:
+            Xp = np.pad(X, ((0, 0), (0,0), (p, p), (p, p)), mode='constant')
+        X_col = Xp[:, k, i, j]  
+ 
+       # Do im2col trick once again
+        # k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
+        # X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
         X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1)
         # Here we just transposed X into columns, in the same way as in forward phase
         
         # here we sum up all errors, reshape them into matrix as well
         db = np.sum(error_batch, axis=(0, 2, 3)) # ?? Do we sum it as it should be
-        #db = np.sum(error_batch, axis=(0, 3, 2))
-        db = db.reshape(self.out_channels, -1) 
+        # db = db.reshape(self.out_channels, -1) # problems with dimensions in big network
         
         # Here - we reshape batch of errors in order to multiply it by weights
         dout_reshaped = error_batch.transpose(1, 2, 3, 0).reshape(self.out_channels, -1)
         dW = np.matmul(dout_reshaped, X_col.T)
         dW = dW.reshape(self.W.shape)
         W_reshape = self.W.reshape(self.out_channels, -1)
-        dX_col = W_reshape.T @ dout_reshaped
+        dX_col = np.matmul(W_reshape.T, dout_reshaped)
         
         # Reshape dX back
         dX_reshaped = dX_col.reshape(self.in_channels * self.height * self.width, -1, batch_size).transpose(2, 0, 1)
+        # try also this one: dX_reshape = transpose(1, 2, 0).reshape(....)
         h_pad, w_pad = in_height + 2*self.padding, in_width + 2*self.padding
         x_pad = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
-        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped)
-        x_pad_alt = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
-        x_pad_alt[:, k, i, j] = dX_reshaped
+        np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped) # SLOW THING
+        # x_pad_alt = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
+        # x_pad_alt[:, k, i, j] = dX_reshaped
+        # x_pad = x_pad_alt
         # remove padding (if any)
         if self.padding == 0:
             dX = x_pad
@@ -151,10 +177,11 @@ class ConvLayer(object):
         # print("self.W.shape =", self.W.shape)
         # print("update_W.shape =", update_W.shape)
         self.W -= update_W
+        
         # print("self.b.shape =", self.b.shape)
         # print("update_b.shape =", update_b.shape)
         # TODO: remove the comment
-        # self.b -= update_b
+        self.b -= update_b
 
 
 

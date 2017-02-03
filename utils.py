@@ -1,6 +1,7 @@
 import numpy as np
-# import matplotlib.pyplot as plt
-
+import matplotlib.pyplot as plt
+from pathlib import Path
+import pickle
 
 def ReLU(input_array):
     # rectified linear unit activation function
@@ -19,23 +20,17 @@ def vis_img(x):
     plt.imshow(img)
     plt.show()
 
-
 def get_data_fast(name):
-    #some problems with training labels, fix later
-    data_csv_path = Path('.').resolve().parent/"Data"/(name + ".csv")
+    data_csv_path = Path('.').resolve().parent/"data"/(name + ".csv")
     data_pkl_path = data_csv_path.parent/(name+".pkl")
-    f = None
-    try:
+    if data_pkl_path.exists():
         with data_pkl_path.open('rb') as f:
             data = pickle.load(f)
-    except (OSError, IOError) as e:
-        f = str(data_csv_path)
-        data = np.genfromtxt(fname = str(data_csv_path), delimiter = ",")
-        with data_csv_path.open('wb') as f:
+    else:
+        data = np.genfromtxt(fname = str(data_csv_path), skip_header = True if name == "Ytr" else False, delimiter = ",")
+        with data_pkl_path.open('wb') as f:
             pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
-    #data = data[:,:-1]
     return data
-
 
 """
 im2col trick
@@ -55,11 +50,5 @@ def get_im2col_indices(in_channels, height, width, out_height, out_width, stride
     i = i.astype(int)
     j = j.astype(int)
     return k, i, j
-
-
-
-
-
-
 
     
