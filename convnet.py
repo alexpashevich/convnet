@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import math
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
@@ -12,6 +11,15 @@ from utils import vis_img, get_data_fast, get_im2col_indices
 from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
+from pathlib import Path
+import logging
+import datetime
+
+LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
+                            "%Y-%m-%d %H:%M:%S")
+LOGFOLDER = Path('logs')
+
+
 
 
 def CE_loss(y_true, y_pred):
@@ -415,27 +423,32 @@ def test_cnn():
     cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
 
 
+def logging_setup():
+    """ Define logging to STDOUT """
+    logger = logging.getLogger()
+    handler = logging.StreamHandler()
+    handler.setFormatter(LOG_FORMATTER)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+def logging_to_file(filename):
+    """ If no name - generate name automatically """
+    if filename is None:
+        logfilename = LOGFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S.log')
+    else:
+        logfilename = LOGFOLDER/filename
+    out_filehandler = logging.FileHandler(str(logfilename))
+    out_filehandler.setFormatter(LOG_FORMATTER)
+    log.addHandler(out_filehandler)
+
 if __name__ == "__main__":
     # np.random.seed(500)
+    log = logging_setup()
+    log.setLevel(logging.DEBUG)
+
     main()
     # test_moons()
     # try_kaggle()
     # test_poollayer()
     # test_cnn()
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-    
-
