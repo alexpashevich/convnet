@@ -1,12 +1,9 @@
 
 import numpy as np
 import math
-import sys
 import logging
 # sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
-sys.path.append("../hipsternet")
 import hipsternet.layer as hl
-import hipsternet.input_data as input_data
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
@@ -49,6 +46,9 @@ class ConvNet:
         self.layers = []
         self.nb_layers = 0
 
+    def set_img_shape(self, img_shape):
+        self.img_shape = img_shape
+
     def add_layer(self, layer_type, layer_info):
         ''' add a layer to the NN '''
         if layer_type == "fclayer":
@@ -73,7 +73,7 @@ class ConvNet:
             # print("forward_pass iter")
             if type(layer) is ConvLayer and len(cur_input_hipster.shape) < 4:
                 # X -> ConvLayer, we have to resize the input
-                cur_input_hipster = cur_input_hipster.reshape(-1, 3, 32, 32)
+                cur_input_hipster = cur_input_hipster.reshape(-1, *self.img_shape)
 
             cur_input_hipster, cache = hl.conv_forward(cur_input_hipster, layer.W, np.expand_dims(layer.b, 1), stride = layer.stride, 
                                                         padding = layer.padding)
@@ -100,7 +100,7 @@ class ConvNet:
             # print("forward_pass iter")
             if type(layer) is ConvLayer and len(cur_input.shape) < 4:
                 # X -> ConvLayer, we have to resize the input
-                cur_input = cur_input.reshape(-1, 3, 32, 32)
+                cur_input = cur_input.reshape(-1, *self.img_shape)
 
             if type(layer) is FCLayer and len(cur_input.shape) > 2:
                 # ConvLayer -> FCLayer, we have to resize the input
@@ -145,7 +145,7 @@ class ConvNet:
             if type(layer) is ConvLayer and len(prev_out.shape) < 4:
                 # print("reshaping for ConvLayer")
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
-                prev_out_hipster = prev_out_hipster.reshape(-1, 3, 32, 32)
+                prev_out_hipster = prev_out_hipster.reshape(-1, *self.img_shape)
 
             # if type(layer) is FCLayer and len(prev_out.shape) > 3:
                 # print("reshaping for FCLayer")
@@ -188,7 +188,7 @@ class ConvNet:
             if type(layer) is ConvLayer and len(prev_out.shape) < 4:
                 # print("reshaping for ConvLayer")
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
-                prev_out = prev_out.reshape(-1, 3, 32, 32)
+                prev_out = prev_out.reshape(-1, *self.img_shape)
 
             if type(layer) is FCLayer and len(prev_out.shape) > 3:
                 # print("reshaping for FCLayer")
@@ -243,7 +243,7 @@ class ConvNet:
 
 
     def fit(self, X_train, y_train, K, minibatch_size, n_iter,
-            X_cv = None, y_cv = None, step_size = 0.1, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False):
+            X_cv = None, y_cv = None, step_size = 0.1, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False, print_every_proc = 1):
         ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
@@ -263,7 +263,6 @@ class ConvNet:
             prev_loss = loss
             loss = 0
             proc_done = 0
-
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
                 X_minibatch = X_train[i:i + minibatch_size] # TODO: check if it is okey when X_size % minibatch_size != 0
@@ -289,9 +288,9 @@ class ConvNet:
                         self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
                                               step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
 
-                # if 1. * i / X_train.shape[0] > (proc_done + 1) * 0.1:
-                    # print("%d out of %d done" % (i, X_train.shape[0]))
-                    # proc_done += 1
+                if 100. * i / X_train.shape[0] > proc_done + print_every_proc:
+                    proc_done += print_every_proc
+                    print("%d%% done" % (proc_done))
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 

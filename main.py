@@ -3,9 +3,9 @@
 Do convnet experiments
 
 Usage:
-    main.py test (moons|kaggle|poollayer)
+    main.py test (moons|kaggle|poollayer|mnist)
     main.py test conv [--valsize <float>] [--seed <int>] [options]
-    main.py test cnn
+    main.py test kaggle_cnn
     main.py test tensorflow (full|slim)
 
 Options:
@@ -20,8 +20,10 @@ from pathlib import Path
 from docopt import docopt
 from datetime import datetime
 import logging
+import sys
+sys.path.append("external/hipsternet")
 
-from our_tests import test_moons, test_kaggle, test_poollayer, test_cnn, test_conv_layer
+from our_tests import test_moons, test_kaggle_fcnn, test_poollayer, test_kaggle_cnn, test_conv_layer, test_mnist
 from tf_tests import test_tensorflow_full, test_tensorflow_slim
 
 
@@ -54,11 +56,13 @@ def main(args):
         if args['moons']:
             test_moons()
         elif args['kaggle']:
-            test_kaggle()
+            test_kaggle_fcnn()
+        elif args['mnist']:
+            test_mnist()
         elif args['poollayer']:
             test_poollayer()
-        elif args['cnn']:
-            test_cnn()
+        elif args['kaggle_cnn']:
+            test_kaggle_cnn()
         elif args['conv']:
             valsize = float(args['--valsize'])
             seed = None

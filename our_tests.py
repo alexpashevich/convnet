@@ -3,11 +3,12 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import make_moons
+import hipsternet.input_data as input_data
 from pathlib import Path
 import pandas as pd
 
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar
 
 HIPSTERNET = Path('external/hipsternet')
 
@@ -119,7 +120,7 @@ def test_moons():
     print('Mean accuracy: %f' % accs)
 
 
-def test_kaggle():
+def test_kaggle_fcnn():
     X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
     y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
@@ -179,60 +180,67 @@ def test_poollayer():
     # vis_img(X_test[40,:])
     # vis_img(X_out)
 
-def test_cnn():
-    # X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
-    # y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
-    # X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
-
+def test_kaggle_cnn():
     X_train_full = get_data_fast("Xtr")[:,:-1]
     X_test = get_data_fast("Xte")[:,:-1]
-    y_train_full = get_data_fast("Ytr")[:,1]
+    y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
-    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.1)
 
-    # vis_img(X_test[40,:])
+    nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
+    img_shape = (3, 32, 32)
 
-    print(X_train.shape)
-    print(y_train.shape)
-    print(X_cv.shape)
-    print(y_cv.shape)
-    # print(X_test.shape)
+    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test)
 
-    nb_features = 32 * 32 * 3
+    X_train = X_train.reshape(-1, *img_shape)
+    X_val = X_val.reshape(-1, *img_shape)
+    X_test = X_test.reshape(-1, *img_shape)
+
+    print("X_train.shape = ", X_train.shape)
+    print("y_train.shape = ", y_train.shape)
+    print("X_val.shape = ", X_val.shape)
+    print("y_val.shape = ", y_val.shape)
+    print("X_test.shape = ", X_test.shape)
+
+
+    ch1 = 32
+    ch2 = 64
+    ch3 = 128
     nb_classes = 10
 
-    ch1 = 12#*2
-    ch2 = 8#*2
-    ch3 = 4#*2
-    sizeFC1 = 200
-
     cnn = ConvNet()
-    cnn.add_layer("convlayer", layer_info = {"in_channels": 3,
+    cnn.set_img_shape(img_shape)
+    cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
                                              "out_channels": ch1,
-                                             "height": 6,
-                                             "width": 6,
-                                             "stride": 2,
-                                             "padding": 0,
-                                             "activation_type": "ReLU"})
+                                             "height": 5,
+                                             "width": 5,
+                                             "stride": 1,
+                                             "padding": 2,
+                                             "activation_type": "ReLU"}) # 32 x 32 x ch1
+    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
                                              "out_channels": ch2,
-                                             "height": 3,
-                                             "width": 3,
+                                             "height": 5,
+                                             "width": 5,
                                              "stride": 1,
-                                             "padding": 0,
-                                            "activation_type": "ReLU"})
+                                             "padding": 2,
+                                            "activation_type": "ReLU"}) # 16 x 16 x ch2
+    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
                                              "out_channels": ch3,
-                                             "height": 3,
-                                             "width": 3,
+                                             "height": 8,
+                                             "width": 8,
                                              "stride": 1,
                                              "padding": 0,
-                                             "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": ch3 * 24 * 24, "output_size": sizeFC1, "activation_type": "ReLU"})
-    cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
-    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
-
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
+                                             "activation_type": "ReLU"}) # 1 x 1 x ch3
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                             "out_channels": nb_classes,
+                                             "height": 1,
+                                             "width": 1,
+                                             "stride": 1,
+                                             "padding": 0,
+                                             "activation_type": "None"}) # 1 x 1 x 10
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, n_iter = 30, step_size=0.01, use_vanila_sgd=True)
 
 
 
@@ -272,11 +280,11 @@ def whitening(data):
     return np.concatenate((r_data, g_data, b_data), axis=1)
 
 
-def test_convlayers():
+def test_mnist():
     # get kaggle data
-    X_train_full = get_data_fast("Xtr")[:,:-1]
-    X_test = get_data_fast("Xte")[:,:-1]
-    y_train_full = get_data_fast("Ytr")[:,1].astype(int)
+    # X_train_full = get_data_fast("Xtr")[:,:-1]
+    # X_test = get_data_fast("Xte")[:,:-1]
+    # y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
     # get CIFAR_orig data
     # data = unpickle("../cifar_orig/data_batch_5")
@@ -286,60 +294,69 @@ def test_convlayers():
     # X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
 
     # get MNIST data
-    mnist = input_data.read_data_sets('../MNIST_data/', one_hot=False)
+    mnist = input_data.read_data_sets('Data/MNIST_data/', one_hot=False)
     X_train, y_train = mnist.train.images, mnist.train.labels
+    sampled_indexes_train = np.random.choice(X_train.shape[0], 5000)
+    X_train = X_train[sampled_indexes_train,:]
+    y_train = y_train[sampled_indexes_train]
+
     X_val, y_val = mnist.validation.images, mnist.validation.labels
+    sampled_indexes_val = np.random.choice(X_val.shape[0], 1000)
+    X_val = X_val[sampled_indexes_val,:]
+    y_val = y_val[sampled_indexes_val]
+
     X_test, y_test = mnist.test.images, mnist.test.labels
 
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (1, 28, 28)
 
-    X_train, X_val, X_test = prepro(X_train, X_val, X_test)
+    X_train, X_val, X_test = prepro_mnist(X_train, X_val, X_test)
 
     X_train = X_train.reshape(-1, *img_shape)
     X_val = X_val.reshape(-1, *img_shape)
     X_test = X_test.reshape(-1, *img_shape)
 
-    print(X_train.shape)
-    print(y_train.shape)
-    print(X_val.shape)
-    print(y_val.shape)
-    print(X_test.shape)
+    print("X_train.shape = ", X_train.shape)
+    print("y_train.shape = ", y_train.shape)
+    print("X_val.shape = ", X_val.shape)
+    print("y_val.shape = ", y_val.shape)
+    print("X_test.shape = ", X_test.shape)
 
 
     ch1 = 32
-    ch2 = 32
-    ch3 = 64
-    # ch4 = 8
-    # ch5 = 8
+    ch2 = 64
+    ch3 = 128
     nb_classes = 10
 
     cnn = ConvNet()
+    cnn.set_img_shape(img_shape)
     cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
                                              "out_channels": ch1,
                                              "height": 5,
                                              "width": 5,
                                              "stride": 1,
-                                             "padding": 1,
-                                             "activation_type": "ReLU"}) # 25 x 25 x ch1
+                                             "padding": 2,
+                                             "activation_type": "ReLU"}) # 28 x 28 x ch1
+    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 14 x 14 x ch1
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
                                              "out_channels": ch2,
-                                             "height": 3,
-                                             "width": 3,
-                                             "stride": 2,
-                                             "padding": 0,
-                                            "activation_type": "ReLU"}) # 11 x 11 x ch2
+                                             "height": 5,
+                                             "width": 5,
+                                             "stride": 1,
+                                             "padding": 2,
+                                            "activation_type": "ReLU"}) # 14 x 14 x ch2
+    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 7 x 7 x ch2
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
                                              "out_channels": ch3,
-                                             "height": 3,
-                                             "width": 3,
-                                             "stride": 2,
+                                             "height": 7,
+                                             "width": 7,
+                                             "stride": 1,
                                              "padding": 0,
-                                             "activation_type": "ReLU"}) # 4 x 4 x ch3
+                                             "activation_type": "ReLU"}) # 1 x 1 x ch3
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
                                              "out_channels": nb_classes,
-                                             "height": 4,
-                                             "width": 4,
+                                             "height": 1,
+                                             "width": 1,
                                              "stride": 1,
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10

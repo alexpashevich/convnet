@@ -129,7 +129,16 @@ class PoolLayer(object):
         self.last_max_ids = None
         self.last_X_col = None
 
-        return None, None, dA
+        return np.ones(1), np.ones(1), dA
+
+    def get_W_shape(self):
+        return (1, 1)
+
+    def get_b_shape(self):
+        return (1, 1)
+
+    def update(self, _1, _2):
+        pass
 
     def assert_pool_layer(self):
         # get CIFAR_orig data

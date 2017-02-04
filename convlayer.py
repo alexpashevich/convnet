@@ -79,8 +79,6 @@ class ConvLayer(object):
 
     def get_output_dims(self, X): # we need it because not every filter size can be applied
         batch_size, in_channels, in_height, in_width = X.shape
-        print("in_height", in_height, "self.height", self.height, "self.padding", self.padding, "self.stride", self.stride)
-        print("in_width", in_width, "self.width", self.width, "self.padding", self.padding, "self.stride", self.stride)
         assert in_channels == self.in_channels
         assert (in_height - self.height + 2*self.padding) % self.stride == 0
         assert (in_width - self.width + 2*self.padding) % self.stride == 0

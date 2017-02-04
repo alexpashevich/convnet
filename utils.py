@@ -39,6 +39,27 @@ def unpickle(file):
     fo.close()
     return dict
 
+def prepro_mnist(X_train, X_val, X_test):
+    mean = np.mean(X_train)
+    return X_train - mean, X_val - mean, X_test - mean
+
+def prepro_cifar(X_train, X_val, X_test):
+    mean_r = np.mean(X_train[:,0:1024])
+    mean_g = np.mean(X_train[:,1024:2048])
+    mean_b = np.mean(X_train[:,2048:3072])
+    means = np.zeros(3)
+
+    for i in range(0, 3072, 1024):
+        mean = np.mean(X_train[:,i:i+1024])
+        print("mean before = ", mean)
+        X_train[:,i:i+1024] = X_train[:,i:i+1024] - mean
+        X_val[:,i:i+1024] = X_val[:,i:i+1024] - mean
+        X_test[:,i:i+1024] = X_test[:,i:i+1024] - mean
+        print("mean after = ", np.mean(X_train[:,i:i+1024]))
+
+
+    return X_train, X_val, X_test
+
 """
 im2col trick
 Courtesy of :
