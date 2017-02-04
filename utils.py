@@ -21,7 +21,7 @@ def vis_img(x):
     plt.show()
 
 def get_data_fast(name):
-    data_csv_path = Path('.').resolve().parent/"data"/(name + ".csv")
+    data_csv_path = Path('.').resolve()/"Data"/(name + ".csv")
     data_pkl_path = data_csv_path.parent/(name+".pkl")
     if data_pkl_path.exists():
         with data_pkl_path.open('rb') as f:
