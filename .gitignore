@@ -4,3 +4,5 @@
 __pycache__/*
 read_file.py
 yann.py
+Data/*
+logs/*
