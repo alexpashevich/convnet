@@ -112,8 +112,8 @@ class ConvNet:
             cur_input = cur_input.reshape(-1, cur_input.shape[1] * cur_input.shape[2] * cur_input.shape[3])
 
         # the softmax layer, we subtract maximum to avoid overflow
-        # cur_input = softmax(cur_input)
-        cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
+        cur_input = softmax(cur_input)
+        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
         outputs.append(cur_input)
 
         return outputs
@@ -305,11 +305,6 @@ class ConvNet:
                 accs = (y_cv_pred == y_cv).sum() / y_cv.size
                 print("Accuracy on cross validation = %f" % accs)
 
-            if X_train is not None and y_train is not None:
-                y_train_pred = self.predict(X_train)
-                accs = (y_train_pred == y_train).sum() / y_train.size
-                print("Accuracy on train = %f" % accs)
-
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
                 print("Termination criteria is true, I stop the learning...")
                 break
@@ -318,7 +313,7 @@ class ConvNet:
         ''' make prediction for all elements in X_test based on the learnt model '''
         y_test = []
         for X in X_test:
-            prediction = np.argmax(self.forward_pass(X)[0][-1])
+            prediction = np.argmax(self.forward_pass(X)[-1])
             y_test.append(prediction)
         return np.array(y_test)
 
@@ -692,7 +687,7 @@ def fit_orig_cifar():
 if __name__ == "__main__":
     # np.random.seed(500)
     # main()
-    test_moons()
+    # test_moons()
     # try_kaggle_fcnn()
     # test_poollayer()
     # fit_kaggle_data() # check if it still works

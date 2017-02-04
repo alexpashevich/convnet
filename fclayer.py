@@ -34,9 +34,9 @@ class FCLayer(object):
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-    #     print("[FCLayer_back] error_batch.shape = ", error_batch.shape)
-    #     print("[FCLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-    #     print("[FCLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
+        # print("[FCLayer_back] error_batch.shape = ", error_batch.shape)
+        # print("[FCLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
+        # print("[FCLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
 
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0
