@@ -19,7 +19,7 @@ class FCLayer(object):
 
     def forwardprop(self, X):
         ''' X - [batch_size, input_size] '''
-        print("[FCLayer] X.shape = ", X.shape)
+        # print("[FCLayer] X.shape = ", X.shape)
 
         out = X @ self.W + np.outer(np.ones(X.shape[0]), self.b)
 
@@ -30,7 +30,7 @@ class FCLayer(object):
         else:
             print("error: unknown activation type")
             out = out
-        print("[FCLayer] output.shape = ", out.shape)
+        # print("[FCLayer] output.shape = ", out.shape)
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
@@ -50,3 +50,4 @@ class FCLayer(object):
     def update(self, update_W, update_b):
         self.W -= update_W
         self.b -= update_b
+

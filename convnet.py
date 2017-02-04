@@ -134,7 +134,7 @@ class ConvNet:
 
 
     def fit(self, X_train, y_train, K, minibatch_size, n_iter,
-            X_cv = None, y_cv = None, step_size = 0.001, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = True):
+            X_cv = None, y_cv = None, step_size = 0.001, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False):
         ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
@@ -176,7 +176,7 @@ class ConvNet:
                         # do RMSprop step
                         self.layers[i].update(step_size / np.sqrt(E_g_W[i] + epsilon) * grads_W[i],
                                               step_size / np.sqrt(E_g_b[i] + epsilon) * grads_b[i])
-
+            print("Mean value of the gradient = %f" % (np.mean(grads_W[i])))
             print("Loss = %f" % (loss / X_train.shape[0]))
 
 
@@ -216,7 +216,7 @@ def main():
                                              "height": 5,
                                              "width": 5,
                                              "stride": 1,
-                                             "padding": 1,
+                                             "padding": 0,
                                              "activation_type": "None"})
 
     np.random.seed(100)
@@ -235,15 +235,14 @@ def main():
     import sys
     sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
     import hipsternet.layer as hl
-    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 1)
+    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 0)
     OUT = hl.conv_backward(out - er1, cache)
 
     print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
     print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
     print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
-    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
-    sys.exit()
+    # sys.exit()
 
     # TENSORFLOW RELATED STUFF
     # INPUTS: batch|channels|height|width --> batch|height|width|channels
@@ -268,11 +267,12 @@ def main():
     tfgrad = tf.gradients(silly_loss, W_)
 
     # more grads
-    opt = tf.train.GradientDescentOptimizer(0.1)
+    opt = tf.train.GradientDescentOptimizer(0.001)
     grads = opt.compute_gradients(silly_loss)
 
     with tf.Session() as sess:
-        with tf.device('/cpu:0'):
+        # with tf.device('/cpu:0'):
+        with tf.device('/GPU:0'):
             sess.run(tf.global_variables_initializer())
             V_, B_, loss_, grads_ = sess.run([conv2, tfgrad, silly_loss, grads], feed_dict={
                 ibatch_:tf_input_batch.astype('float32'),
@@ -281,9 +281,6 @@ def main():
     print('TF_conv_mistake = {}'.format(np.mean(V.transpose(0, 2, 3, 1) - V_)))
     print('TF_grad_mistake = {}'.format(np.mean(B[0].transpose(2, 3, 1, 0) - B_)))
     print('TF_grad_sum  = {} {}'.format(np.sum(B[0].transpose(2, 3, 1, 0)), np.sum(B_)))
-   
-   # Hipsternet
-
 
     # plt.imshow(V[:, :, 3])
 
@@ -380,7 +377,7 @@ def test_cnn():
     # print(X_cv.shape)
     # print(y_cv.shape)
     # print(X_test.shape)
-    #
+    
     nb_features = 32 * 32 * 3
     nb_classes = 10
 
@@ -420,11 +417,11 @@ def test_cnn():
 
 if __name__ == "__main__":
     # np.random.seed(500)
-    # main()
+    main()
     # test_moons()
     # try_kaggle()
     # test_poollayer()
-    test_cnn()
+    # test_cnn()
 
 
 

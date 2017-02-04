@@ -12,10 +12,10 @@ class ConvLayer(object):
         self.stride = layer_info["stride"]
         self.padding = layer_info["padding"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
-        # self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
-        # self.b = np.random.randn(self.out_channels) * 0.01
-        self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
-        self.b = np.ones(self.out_channels)*0.01
+        self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
+        self.b = np.random.randn(self.out_channels) * 0.01
+        # self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
+        # self.b = np.ones(self.out_channels)*0.01
         
     def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
         time = timer()
@@ -109,9 +109,9 @@ class ConvLayer(object):
         3. Multiply 1 by 2              
         """
 
-        print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
-        print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
+        # print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
+        # print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
+        # print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
         
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
