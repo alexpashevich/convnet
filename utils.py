@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
 import pickle
 
@@ -15,6 +14,7 @@ def sigmoid(input_array): # not used now
 
 def vis_img(x):
     """ Take image of dims [channels, h, w], show"""
+    import matplotlib.pyplot as plt
     img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
     print(img - [0.25, 0.2, 0.2])
     plt.imshow(img)
@@ -31,6 +31,13 @@ def get_data_fast(name):
         with data_pkl_path.open('wb') as f:
             pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
     return data
+
+def unpickle(file):
+    import _pickle as cPickle
+    fo = open(file, 'rb')
+    dict = cPickle.load(fo, encoding ='bytes')
+    fo.close()
+    return dict
 
 """
 im2col trick

@@ -12,10 +12,10 @@ class ConvLayer(object):
         self.stride = layer_info["stride"]
         self.padding = layer_info["padding"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
-        # self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
-        # self.b = np.random.randn(self.out_channels) * 0.01
-        self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
-        self.b = np.ones(self.out_channels)*0.01
+        self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
+        self.b = np.random.randn(self.out_channels) * 0.01
+        # self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
+        # self.b = np.ones(self.out_channels)*0.01
         
     def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
         time = timer()
@@ -79,6 +79,8 @@ class ConvLayer(object):
 
     def get_output_dims(self, X): # we need it because not every filter size can be applied
         batch_size, in_channels, in_height, in_width = X.shape
+        print("in_height", in_height, "self.height", self.height, "self.padding", self.padding, "self.stride", self.stride)
+        print("in_width", in_width, "self.width", self.width, "self.padding", self.padding, "self.stride", self.stride)
         assert in_channels == self.in_channels
         assert (in_height - self.height + 2*self.padding) % self.stride == 0
         assert (in_width - self.width + 2*self.padding) % self.stride == 0

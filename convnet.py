@@ -1,22 +1,22 @@
 import numpy as np
 import pandas as pd
 import math
+import sys
+# sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
+sys.path.append("../hipsternet")
+import hipsternet.layer as hl
+import hipsternet.input_data as input_data
 from sklearn.utils import shuffle
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
 # import tensorflow as tf
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
-from utils import vis_img, get_data_fast, get_im2col_indices 
+from utils import vis_img, get_data_fast, get_im2col_indices
 from fclayer import FCLayer
 from poollayer import PoolLayer
 from convlayer import ConvLayer
-
-# import warnings
-# from scipy.cluster.vq import whiten
-# import logging
-# LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s","%Y-%m-%d %H:%M:%S")
 
 
 def CE_loss(y_true, y_pred):
@@ -34,6 +34,11 @@ def CE_loss_batch(y_true_batch, y_pred_batch):
 def square_loss(y_true, y_pred): # not used now
     # square loss
     return 1. / 2 * np.sum((y_true - y_pred) ** 2)
+
+
+def softmax(X):
+    eX = np.exp((X.T - np.max(X, axis=1)).T)
+    return (eX.T / eX.sum(axis=1)).T
 
 
 class ConvNet:
@@ -56,12 +61,41 @@ class ConvNet:
         else:
             print("error: unknown layer type")
 
+    def forward_pass_hipster(self, X):
+        cur_input_hipster = X
+        outputs_hipster = []
+        cache_hipster = []
+        outputs_hipster.append(cur_input_hipster)
+
+        for layer in self.layers:
+            # print("forward_pass iter")
+            if type(layer) is ConvLayer and len(cur_input_hipster.shape) < 4:
+                # X -> ConvLayer, we have to resize the input
+                cur_input_hipster = cur_input_hipster.reshape(-1, 3, 32, 32)
+
+            cur_input_hipster, cache = hl.conv_forward(cur_input_hipster, layer.W, np.expand_dims(layer.b, 1), stride = layer.stride, 
+                                                        padding = layer.padding)
+            outputs_hipster.append(np.array(cur_input_hipster))
+            cache_hipster.append(cache)
+
+        if len(cur_input_hipster.shape) > 2:
+            # we used a NN without FC layers
+            cur_input_hipster = cur_input_hipster.reshape(-1, cur_input_hipster.shape[1] * cur_input_hipster.shape[2] * cur_input_hipster.shape[3])
+
+        # the softmax layer, we subtract maximum to avoid overflow
+        cur_input_hipster = softmax(cur_input_hipster)
+        outputs_hipster.append(cur_input_hipster)
+
+        return outputs_hipster, cache_hipster
+
     def forward_pass(self, X):
         ''' return the input data X and outputs of every layer '''
         cur_input = X
         outputs = []
         outputs.append(cur_input)
+        
         for layer in self.layers:
+            # print("forward_pass iter")
             if type(layer) is ConvLayer and len(cur_input.shape) < 4:
                 # X -> ConvLayer, we have to resize the input
                 cur_input = cur_input.reshape(-1, 3, 32, 32)
@@ -73,30 +107,66 @@ class ConvNet:
             cur_input = layer.forwardprop(cur_input)
             outputs.append(cur_input)
 
+        if len(cur_input.shape) > 2:
+            # we used a NN without FC layers
+            cur_input = cur_input.reshape(-1, cur_input.shape[1] * cur_input.shape[2] * cur_input.shape[3])
+
         # the softmax layer, we subtract maximum to avoid overflow
-        # print(cur_input)
-        # print(cur_input.shape)
-
-        # try:
+        # cur_input = softmax(cur_input)
         cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
-        # except Warning as e:
-            # print(e)
-            # print(np.exp(cur_input - np.max(cur_input)))
-
         outputs.append(cur_input)
 
-        # TODO: remove comments below
-
-        # cur_input = np.exp(cur_input - np.max(cur_input)) / np.outer(np.exp(cur_input - np.max(cur_input)).sum(axis=1), np.ones(cur_input.shape[1]))
-        # outputs.append(cur_input)
-
         return outputs
+
+    def backward_pass_hipster(self, errors_batch_hipster, outputs_batch_hipster, cache_hipster):
+        ''' do the backward pass and return grads for W update '''
+        i = 1
+
+        grad_W_hipster = len(self.layers) * [None]
+        grad_b_hipster = len(self.layers) * [None]
+
+        for layer in reversed(self.layers):
+
+            if type(layer) is ConvLayer:
+                type_name = "convlayer"
+            else:
+                type_name = "fclayer"
+
+            cur_out_hipster = np.array(outputs_batch_hipster[-i])
+            prev_out_hipster = np.array(outputs_batch_hipster[-1 - i])
+
+            if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
+                # print("reshaping for ConvLayer")
+                # layer is the last ConvLayer, we have to resize the input
+                errors_batch_hipster = errors_batch_hipster.reshape(-1, cur_out_hipster.shape[1], cur_out_hipster.shape[2], cur_out_hipster.shape[3])
+
+            if type(layer) is ConvLayer and len(prev_out.shape) < 4:
+                # print("reshaping for ConvLayer")
+                # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
+                prev_out_hipster = prev_out_hipster.reshape(-1, 3, 32, 32)
+
+            # if type(layer) is FCLayer and len(prev_out.shape) > 3:
+                # print("reshaping for FCLayer")
+                # layer is the first FC after convolutional layers, we have to reshape prev_out
+                # prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
+
+            # we skip the last output as it contains the final classification output
+            (errors_batch_hipster, dW_hipster, db_hipster) = hl.conv_backward(errors_batch_hipster, cache_hipster[-i])
+
+            grad_W_hipster[-i] = dW_hipster
+            grad_b_hipster[-i] = db_hipster
+            i += 1
+
+            # print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
+
+        return grad_W_hipster, grad_b_hipster
 
     def backward_pass(self, errors_batch, outputs_batch):
         ''' do the backward pass and return grads for W update '''
         i = 1
         grad_W = len(self.layers) * [None]
         grad_b = len(self.layers) * [None]
+
         for layer in reversed(self.layers):
 
             if type(layer) is ConvLayer:
@@ -107,13 +177,14 @@ class ConvNet:
 
             cur_out = np.array(outputs_batch[-i])
             prev_out = np.array(outputs_batch[-1 - i])
+
             if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
-                print("reshaping for ConvLayer")
+                # print("reshaping for ConvLayer")
                 # layer is the last ConvLayer, we have to resize the input
                 errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
 
             if type(layer) is ConvLayer and len(prev_out.shape) < 4:
-                print("reshaping for ConvLayer")
+                # print("reshaping for ConvLayer")
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
                 prev_out = prev_out.reshape(-1, 3, 32, 32)
 
@@ -124,8 +195,12 @@ class ConvNet:
 
             # we skip the last output as it contains the final classification output
             (dW, db, errors_batch) = layer.backprop(errors_batch, cur_out, prev_out)
+
+            # print(db_hipster.shape)
+
             grad_W[-i] = dW # we use the returned order here in order to obtain the regular order in the end
             grad_b[-i] = db # the same here
+
             i += 1
 
             # print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
@@ -137,8 +212,13 @@ class ConvNet:
         # outputs_batch = x + layers outputs => len = nb_layers + 1
         # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
         # we do the forward_pass for the whole batch at once
-        time = timer()
+        # time = timer()
         outputs_batch = self.forward_pass(X)
+        # for out_our, out_hipster in zip(outputs_batch, outputs_batch_hipster):
+        #     error = out_our - out_hipster
+        #     # error[error < 1e-3] = 0
+        #     print("np.max(error) = ", np.max(error))
+        #     print('hip_to_mine_conv_mistake = {}'.format(np.mean(error)))
         # print('forward_pass computed in {:6f}'.format(timer() - time))
 
         # we get the errors for the whole batch at once
@@ -146,14 +226,22 @@ class ConvNet:
         loss = CE_loss_batch(Y, outputs_batch[-1])
         # print("get_minibatch_grads loss = ", loss)
 
-        time = timer()
+        # time = timer()
         grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
+        # for grad_W_our, grad_b_our, grad_W_hipster, grad_b_hipster in zip(grads_W, grads_b, grads_W_hipster, grads_b_hipster):
+        #     error_W = grad_W_our - grad_W_hipster
+        #     error_b = grad_b_our - grad_b_hipster
+        #     print("np.max(error_W) = ", np.max(error_W))
+        #     print('hip_to_mine_grad_W_mistake = {}'.format(np.mean(error_W)))
+        #     print("np.max(error_b) = ", np.max(error_b))
+        #     print('hip_to_mine_grad_b_mistake = {}'.format(np.mean(error_b)))
         # print('backward_pass computed in {:6f}'.format(timer() - time))
+
         return grads_W, grads_b, loss
 
 
     def fit(self, X_train, y_train, K, minibatch_size, n_iter,
-            X_cv = None, y_cv = None, step_size = 0.001, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = True):
+            X_cv = None, y_cv = None, step_size = 0.1, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False):
         ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
@@ -172,6 +260,7 @@ class ConvNet:
             X_train, y_train_vector = shuffle(X_train, y_train_vector)
             prev_loss = loss
             loss = 0
+            proc_done = 0
 
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
@@ -186,6 +275,8 @@ class ConvNet:
 
                 loss += minibatch_loss
 
+                # print("minibatch_loss = ", minibatch_loss)
+
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
                 for j in range(self.nb_layers):
                     E_g_W[j] = gamma * E_g_W[j] + (1 - gamma) * (grads_W[j] ** 2)
@@ -198,8 +289,11 @@ class ConvNet:
                     else:
                         # do RMSprop step
                         self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
-                                              step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
-                # print("%d out of %d done" % (i, X_train.shape[0]))
+                                              grads_b[j] * step_size / np.sqrt(E_g_b[j] + epsilon))
+
+                # if 1. * i / X_train.shape[0] > (proc_done + 1) * 0.1:
+                    # print("%d out of %d done" % (i, X_train.shape[0]))
+                    # proc_done += 1
 
             print("Loss = %f" % (loss / X_train.shape[0]))
 
@@ -211,6 +305,11 @@ class ConvNet:
                 accs = (y_cv_pred == y_cv).sum() / y_cv.size
                 print("Accuracy on cross validation = %f" % accs)
 
+            if X_train is not None and y_train is not None:
+                y_train_pred = self.predict(X_train)
+                accs = (y_train_pred == y_train).sum() / y_train.size
+                print("Accuracy on train = %f" % accs)
+
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
                 print("Termination criteria is true, I stop the learning...")
                 break
@@ -219,7 +318,7 @@ class ConvNet:
         ''' make prediction for all elements in X_test based on the learnt model '''
         y_test = []
         for X in X_test:
-            prediction = np.argmax(self.forward_pass(X)[-1])
+            prediction = np.argmax(self.forward_pass(X)[0][-1])
             y_test.append(prediction)
         return np.array(y_test)
 
@@ -255,9 +354,6 @@ def main():
     er1 = np.random.random(V.shape)
     B = cnn.layers[0].backprop(V-er1, V, input_batch)
 
-    import sys
-    sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
-    import hipsternet.layer as hl
     out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 1)
     OUT = hl.conv_backward(out - er1, cache)
 
@@ -312,8 +408,9 @@ def main():
     # plt.imshow(V[:, :, 3])
 
 def test_moons():
-    X, Y = make_moons(n_samples=5000, random_state=42, noise=0.1)
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=42)
+    X, Y = make_moons(n_samples=7000, random_state=42, noise=0.1)
+    X_train_val, X_test, Y_train_val, Y_test = train_test_split(X, Y, random_state=42, test_size = 0.2)
+    X_train, X_val, Y_train, Y_val = train_test_split(X_train_val, Y_train_val, random_state=42, test_size = 0.1)
 
     # run_nn(X_train, X_test, Y_train, Y_test)
 
@@ -327,7 +424,10 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, K = 2, minibatch_size = 50, n_iter = 30)
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 30)
+
+    # print(Y_train)
+    # print(Y_test)
 
     y_pred = cnn.predict(X_test)
     accs = (y_pred == Y_test).sum() / Y_test.size
@@ -365,7 +465,7 @@ def try_kaggle_fcnn():
     cnn.add_layer("fclayer", layer_info = {"input_size": size5, "output_size": size6, "activation_type": "None"})
     # cnn.add_layer("fclayer", layer_info = {"input_size": size6, "output_size": size7, "activation_type": "None"})
 
-    #cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
     #y_test = cnn.predict(X_test)
     #y_test.dump("Yte.dat")
 
@@ -373,23 +473,102 @@ def test_poollayer():
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
     cnn = ConvNet()
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"})
-    img_1 = X_test[0,:].reshape(3, 32, 32)
-    img_2 = X_test[4,:].reshape(3, 32, 32)
+
+    cnn.layers[0].assert_pool_layer()
+    # img_1 = X_test[0,:].reshape(3, 32, 32)
+    # img_2 = X_test[4,:].reshape(3, 32, 32)
 
     # vis_img(X_test[40,:])
 
-    X_out = cnn.forward_pass(np.array([img_1, img_2]))[1]
+    # X_out = cnn.forward_pass(np.array([img_1, img_2]))[1]
 
-    print(X_out.shape)
+    # print(X_out.shape)
     # X_out = X_out.reshape(2, -1)
     # X_out_1 = X_out[1]
-    img1 = X_out[0,:,:,:].transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    print(img1.shape)
-    plt.imshow(img1)
+    # img1 = X_out[0,:,:,:].transpose(1, 2, 0) + [0.25, 0.2, 0.2]
+    # print(img1.shape)
+    # plt.imshow(img1)
 
-    plt.show()
+    # plt.show()
     # vis_img(X_test[40,:])
     # vis_img(X_out)
+
+def prepro(X_train, X_val, X_test):
+    mean = np.mean(X_train)
+    return X_train - mean, X_val - mean, X_test - mean
+
+def test_convlayers():
+    # get kaggle data
+    X_train_full = get_data_fast("Xtr")[:,:-1]
+    X_test = get_data_fast("Xte")[:,:-1]
+    y_train_full = get_data_fast("Ytr")[:,1].astype(int)
+
+    # get CIFAR_orig data
+    # data = unpickle("../cifar_orig/data_batch_5")
+    # X_train_full = data[b'data']
+    # y_train_full = np.array(data[b'labels'])
+
+    # X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+
+    # get MNIST data
+    mnist = input_data.read_data_sets('../MNIST_data/', one_hot=False)
+    X_train, y_train = mnist.train.images, mnist.train.labels
+    X_val, y_val = mnist.validation.images, mnist.validation.labels
+    X_test, y_test = mnist.test.images, mnist.test.labels
+
+    nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
+    img_shape = (1, 28, 28)
+
+    X_train, X_val, X_test = prepro(X_train, X_val, X_test)
+
+    X_train = X_train.reshape(-1, *img_shape)
+    X_val = X_val.reshape(-1, *img_shape)
+    X_test = X_test.reshape(-1, *img_shape)
+
+    print(X_train.shape)
+    print(y_train.shape)
+    print(X_val.shape)
+    print(y_val.shape)
+    print(X_test.shape)
+
+
+    ch1 = 32
+    ch2 = 32
+    ch3 = 64
+    # ch4 = 8
+    # ch5 = 8
+    nb_classes = 10
+
+    cnn = ConvNet()
+    cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
+                                             "out_channels": ch1,
+                                             "height": 5,
+                                             "width": 5,
+                                             "stride": 1,
+                                             "padding": 1,
+                                             "activation_type": "ReLU"}) # 25 x 25 x ch1
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
+                                             "out_channels": ch2,
+                                             "height": 3,
+                                             "width": 3,
+                                             "stride": 2,
+                                             "padding": 0,
+                                            "activation_type": "ReLU"}) # 11 x 11 x ch2
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+                                             "out_channels": ch3,
+                                             "height": 3,
+                                             "width": 3,
+                                             "stride": 2,
+                                             "padding": 0,
+                                             "activation_type": "ReLU"}) # 4 x 4 x ch3
+    cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                             "out_channels": nb_classes,
+                                             "height": 4,
+                                             "width": 4,
+                                             "stride": 1,
+                                             "padding": 0,
+                                             "activation_type": "None"}) # 1 x 1 x 10
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, n_iter = 30, step_size=0.01, use_vanila_sgd=True)
 
 def run_cnn(X_train, X_cv, y_train, y_cv):
     # X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
@@ -421,9 +600,9 @@ def run_cnn(X_train, X_cv, y_train, y_cv):
     cnn = ConvNet()
     cnn.add_layer("convlayer", layer_info = {"in_channels": 3,
                                              "out_channels": ch1,
-                                             "height": 5,
-                                             "width": 5,
-                                             "stride": 1,
+                                             "height": 6,
+                                             "width": 6,
+                                             "stride": 2,
                                              "padding": 0,
                                              "activation_type": "ReLU"})
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
@@ -444,7 +623,7 @@ def run_cnn(X_train, X_cv, y_train, y_cv):
     cnn.add_layer("fclayer", layer_info = {"input_size": sizeFC1, "output_size": nb_classes, "activation_type": "ReLU"})
     # import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30, use_vanila_sgd=True)
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_cv, y_cv = y_cv, minibatch_size = 50, n_iter = 30)
 
 def fit_kaggle_data():
     X_train_full = pd.read_csv('../data/Xtr.csv', header = None).as_matrix()[:,:-1]
@@ -495,13 +674,6 @@ def whitening(data):
 
     # return data
 
-def unpickle(file):
-    import _pickle as cPickle
-    fo = open(file, 'rb')
-    dict = cPickle.load(fo, encoding ='bytes')
-    fo.close()
-    return dict
-
 def fit_orig_cifar():
     data = unpickle("../cifar_orig/data_batch_5")
     X = data[b'data']
@@ -518,19 +690,14 @@ def fit_orig_cifar():
     run_cnn(X_train, X_cv, y_train, y_cv)
 
 if __name__ == "__main__":
-
-    # np.seterr(all='raise')
-    # warnings.filterwarnings('error')
-    # log = start_logging()
-    # log_to_file()
-
     # np.random.seed(500)
     # main()
     test_moons()
     # try_kaggle_fcnn()
     # test_poollayer()
-    # fit_kaggle_data()
+    # fit_kaggle_data() # check if it still works
     # fit_orig_cifar()
+    # test_convlayers()
 
 
 

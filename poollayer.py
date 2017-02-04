@@ -1,5 +1,8 @@
 # from utils import get_im2col_indices
 import numpy as np
+from utils import unpickle
+import matplotlib.pyplot as plt
+
 
 # TODO: remove these 3 functions
 def get_im2col_indices(x_shape, field_height, field_width, padding=1, stride=1):
@@ -54,9 +57,6 @@ def col2im_indices(cols, x_shape, field_height=3, field_width=3, padding=1,
 
 class PoolLayer(object):
 
-
-    # TODO: add checks and asserts
-
     def __init__(self, layer_info):
         self.stride = layer_info["stride"]
         self.size = layer_info["size"]
@@ -70,6 +70,11 @@ class PoolLayer(object):
     def forwardprop(self, X):
         # print("X.shape = ", X.shape)
         n, d, h, w = X.shape
+
+        # we want even height and width of the picture
+        assert h % 2 == 0
+        assert w % 2 == 0
+
         X_reshaped = X.reshape(n * d, 1, h, w) # this is necessary to apply the im2col trick, as the pool filters have depth 1
 
         # TODO: use this function instead
@@ -101,14 +106,17 @@ class PoolLayer(object):
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        dA_col = np.zeros(cur_out_batch.shape)
-        error_batch_flat = error_batch.transpose(2, 3, 0, 1).ravel()
+        dA_col = np.zeros(self.last_X_col.shape)
 
         # transposition nd flattening to get the correct arrangement
-        dout_flat = error_batch.transpose(2, 3, 0, 1).ravel()
+        error_batch_flat = error_batch.transpose(2, 3, 0, 1).ravel()
 
         # fill the maximum index of each column with the gradient, the rest stays zero
-        dA_col[self.last_max_ids, range(self.last_max_ids.size)] = dout_flat
+        # print(self.last_max_ids)
+        # print(self.last_max_ids.size)
+        # print(error_batch_flat.shape)
+        # print(dA_col.shape)
+        dA_col[self.last_max_ids, range(self.last_max_ids.size)] = error_batch_flat
                
         n, d, h, w = prev_out_batch.shape
 
@@ -122,4 +130,77 @@ class PoolLayer(object):
         self.last_X_col = None
 
         return None, None, dA
+
+    def assert_pool_layer(self):
+        # get CIFAR_orig data
+        data = unpickle("../cifar_orig/data_batch_5")
+        X_train_full = data[b'data']
+        y_train_full = np.array(data[b'labels'])
+
+        # batch = np.random.randint(255, size=(2, 3, 8, 8))
+        img1 = X_train_full[0,:].reshape(3, 32, 32)
+        img2 = X_train_full[1,:].reshape(3, 32, 32)
+        batch = np.zeros((2, 3, 32, 32))
+        batch[0,:,:,:] = img1
+        batch[1,:,:,:] = img2
+
+        nb_imgs, nb_channels, height, width = batch.shape
+
+        assert height % 2 == 0
+        assert width % 2 == 0
+
+        # we generate error to propagate
+        errors = np.random.randint(255, size=(nb_imgs, nb_channels, height / 2, width / 2))
+        out_silly = np.zeros((nb_imgs, nb_channels, height / 2, width / 2))
+        out_back_silly = np.zeros(batch.shape)
+
+        for k in range(nb_imgs):
+            for ch in range(nb_channels):
+                for i in range(int(height / 2)):
+                    for j in range(int(height / 2)):
+                        out_silly[k, ch, i, j] = np.max([batch[k, ch, 2*i, 2*j],
+                                                         batch[k, ch, 2*i+1, 2*j],
+                                                         batch[k, ch, 2*i, 2*j+1],
+                                                         batch[k, ch, 2*i+1, 2*j+1]])
+                        max_ind = np.argmax([batch[k, ch, 2*i, 2*j], batch[k, ch, 2*i+1, 2*j], batch[k, ch, 2*i, 2*j+1], batch[k, ch, 2*i+1, 2*j+1]])
+                        print(max_ind)
+                        if max_ind == 0:
+                            out_back_silly[k, ch, 2*i, 2*j] = out_silly[k, ch, i, j]
+                        elif max_ind == 1:
+                            out_back_silly[k, ch, 2*i+1, 2*j] = out_silly[k, ch, i, j]
+                        elif max_ind == 2:
+                            out_back_silly[k, ch, 2*i, 2*j+1] = out_silly[k, ch, i, j]
+                        else:
+                            out_back_silly[k, ch, 2*i+1, 2*j+1] = out_silly[k, ch, i, j]
+
+        out_smart = self.forwardprop(batch)
+        _, _, out_back_smart = self.backprop(out_silly, out_silly, out_back_silly)
+
+        # import pudb; pudb.set_trace()
+
+        plt.imshow(out_smart[0,:,:,:].transpose(1, 2, 0))
+        plt.show()
+        plt.imshow(out_smart[1,:,:,:].transpose(1, 2, 0))
+        plt.show()
+
+        print("diff with the assert of maxpool (forward) is =", np.mean(out_silly - out_smart))
+        print("diff with the assert of maxpool (back) is =", np.mean(out_back_silly - out_back_smart))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     
