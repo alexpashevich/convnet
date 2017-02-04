@@ -138,7 +138,12 @@ def test_tensorflow_full():
     #         V_, B_, loss_, grads_ = sess.run([conv2, tfgrad, silly_loss, grads], feed_dict = {
     #             ibatch_:tf_input_batch.astype('float32')})
 
-def slim_training(X_train, y_train, sess):
+def slim_training(X_train, y_train, X_val, y_val, sess):
+    xtr_res = X_train.reshape(-1, 3, 32,32)
+
+    import pudb; pudb.set_trace()  # XXX BREAKPOINT
+    input_batch = xtr_res[:50, :, :, :]
+    tf_input_batch = input_batch.transpose(0, 2, 3, 1)
     sess.run([train_op], feed_dict = {
             input :tf_input_batch.astype('float32')})
 
@@ -148,20 +153,18 @@ def test_tensorflow_slim():
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1]
 
-    X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.1)
 
-    xtr_res = X_train.reshape(-1, 3, 32,32)
-
-    input_batch = xtr_res[:50, :, :, :]
-    tf_input_batch = input_batch.transpose(0, 2, 3, 1)
+    learning_rate = 0.001
 
     # Convolution
-    input = tf.placeholder(tf.float32, shape=tf_input_batch.shape)
+    input = tf.placeholder(tf.float32, shape=(None, 3, 32, 32))
+    labels = tf.placeholder(tf.float32, shape=(None, 10))
 
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
             activation_fn=tf.nn.relu,
             weights_initializer=tf.truncated_normal_initializer(0.0, 0.001),
-            weights_regulariszer=slim.l2_regularizer(0.0005)):
+            weights_regularizer=slim.l2_regularizer(0.0005)):
         net = slim.conv2d(input, 32, [5, 5], scope='conv1')
         net = slim.max_pool2d(net, [2, 2], scope='pool1')
         net = slim.conv2d(net, 64, [5, 5], scope='conv2')
@@ -176,4 +179,4 @@ def test_tensorflow_slim():
     
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        slim_training(X_train, y_train,)
+        slim_training(X_train, y_train, X_val, y_val, sess)

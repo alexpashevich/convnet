@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Do convnet experiments
 
@@ -21,7 +22,7 @@ from datetime import datetime
 import logging
 
 from our_tests import test_moons, test_kaggle, test_poollayer, test_cnn, test_conv
-from tf_tests import test_tensorflow_full
+from tf_tests import test_tensorflow_full, test_tensorflow_slim
 
 
 LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
@@ -67,6 +68,8 @@ def main(args):
         elif args['tensorflow']:
             if args['full']:
                 test_tensorflow_full()
+            elif args['slim']:
+                test_tensorflow_slim()
 
 if __name__ == "__main__":
     args = docopt(__doc__)
