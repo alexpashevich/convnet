@@ -5,7 +5,7 @@ Usage:
     main.py test (moons|kaggle|poollayer)
     main.py test conv [--valsize <float>] [--seed <int>] [options]
     main.py test cnn
-    main.py test tensorflow full
+    main.py test tensorflow (full|slim)
 
 Options:
     Convolution test:

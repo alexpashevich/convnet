@@ -50,5 +50,3 @@ def get_im2col_indices(in_channels, height, width, out_height, out_width, stride
     i = i.astype(int)
     j = j.astype(int)
     return k, i, j
-
-   
