@@ -5,6 +5,7 @@ Usage:
     main.py test (moons|kaggle|poollayer)
     main.py test conv [--valsize <float>] [--seed <int>] [options]
     main.py test cnn
+    main.py test tensorflow full
 
 Options:
     Convolution test:
@@ -20,6 +21,8 @@ from datetime import datetime
 import logging
 
 from our_tests import test_moons, test_kaggle, test_poollayer, test_cnn, test_conv
+from tf_tests import test_tensorflow_full
+
 
 LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
                             "%Y-%m-%d %H:%M:%S")
@@ -61,6 +64,9 @@ def main(args):
             if '--seed' in args and args['--seed'] is not None:
                 seed = int(args['--seed'])
             test_conv(valsize, seed)
+        elif args['tensorflow']:
+            if args['full']:
+                test_tensorflow_full()
 
 if __name__ == "__main__":
     args = docopt(__doc__)
