@@ -6,3 +6,6 @@ read_file.py
 yann.py
 convnet.sublime-project
 convnet.sublime-workspace
+Data/*
+logs/*
+external/*
