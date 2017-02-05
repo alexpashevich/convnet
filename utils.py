@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
 import pickle, logging
+from scipy.ndimage.interpolation import rotate
 log = logging.getLogger(__name__)
 
 def ReLU(input_array):
@@ -45,16 +46,12 @@ def prepro_mnist(X_train, X_val, X_test):
     return X_train - mean, X_val - mean, X_test - mean
 
 def prepro_cifar(X_train, X_val, X_test, img_shape):
-    for i in range(0, 3072, 1024):
-        mean = np.mean(X_train[:,i:i+1024])
-        std = np.std(X_train[:,i:i+1024])
-        log.info("mean before preprocessing = {}".format(mean))
-        log.info("std before preprocessing {}".format(std))
-        X_train[:,i:i+1024] = (X_train[:,i:i+1024] - mean) / std
-        X_val[:,i:i+1024] = (X_val[:,i:i+1024] - mean) / std
-        X_test[:,i:i+1024] = (X_test[:,i:i+1024] - mean) / std
-        log.info("mean after preprocessing = {}".format(np.mean(X_train[:,i:i+1024])))
-        log.info("std after preprocessing = {}".format(np.std(X_train[:,i:i+1024])))
+    # for i in range(0, 3072, 1024):
+    #     mean = np.mean(X_train[:,i:i+1024])
+    #     std = np.std(X_train[:,i:i+1024])
+    #     X_train[:,i:i+1024] = (X_train[:,i:i+1024] - mean) / std
+    #     X_val[:,i:i+1024] = (X_val[:,i:i+1024] - mean) / std
+    #     X_test[:,i:i+1024] = (X_test[:,i:i+1024] - mean) / std
 
     X_train = X_train.reshape(-1, *img_shape)
     X_val = X_val.reshape(-1, *img_shape)
@@ -62,11 +59,13 @@ def prepro_cifar(X_train, X_val, X_test, img_shape):
 
     return X_train, X_val, X_test
 
-def data_augmentation(X, y):
+def data_augmentation(X, y, rotation_angle):
     X_flipped = np.flip(X, 3)
+    X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
+    X_rotated_left = rotate(X, -rotation_angle, (2,3), reshape=False)
     # import pudb; pudb.set_trace()
-    X_aug = np.concatenate((X, X_flipped))
-    y_aug = np.concatenate((y, y))
+    X_aug = np.concatenate((X, X_flipped, X_rotated_right, X_rotated_left))
+    y_aug = np.concatenate((y, y, y, y))
     return X_aug, y_aug
 
 """

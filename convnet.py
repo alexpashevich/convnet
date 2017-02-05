@@ -283,25 +283,31 @@ class ConvNet:
 
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
                 for j in range(self.nb_layers):
-                    E_g_W[j] = gamma * E_g_W[j] + (1 - gamma) * (grads_W[j] ** 2)
-                    E_g_b[j] = gamma * E_g_b[j] + (1 - gamma) * (grads_b[j] ** 2)
+                    if type(self.layers[j]) is not PoolLayer:
+                        # if i > 1:
+                            # import pudb; pudb.set_trace()
+                        E_g_W[j] = gamma * E_g_W[j] + (1 - gamma) * (grads_W[j] ** 2)
+                        E_g_b[j] = gamma * E_g_b[j] + (1 - gamma) * (grads_b[j] ** 2)
 
                 # do gradient step for every layer
                 for j in range(self.nb_layers):
                     if use_vanila_sgd:
-                        # print("[layer {}] update W mean = {}".format(j, np.mean(step_size * grads_W[j])))
-                        # print("[layer {}] update b mean = {}".format(j, np.mean(step_size * grads_b[j])))
-                        self.layers[j].update(step_size * grads_W[j],
-                                              step_size * grads_b[j])
+                        if type(self.layers[j]) is not PoolLayer:
+                            # print("[layer {}] update W mean = {}".format(j, np.mean(step_size * grads_W[j])))
+                            # print("[layer {}] update b mean = {}".format(j, np.mean(step_size * grads_b[j])))
+                            self.layers[j].update(step_size * grads_W[j],
+                                                  step_size * grads_b[j])
                     else:
                         # do RMSprop step
-                        # import pudb; pudb.set_trace()
-                        # print("[layer {}] np.mean(E_g_W[j]) = {}".format(j, np.mean(E_g_W[j])))
-                        # print("[layer {}] np.mean(E_g_b[j]) = {}".format(j, np.mean(E_g_b[j])))
-                        # print("[layer {}] update W mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j])))
-                        # print("[layer {}] update b mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])))
-                        self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
-                                              step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
+                        if type(self.layers[j]) is not PoolLayer:
+                            # print("[layer {}] np.mean(E_g_W[j]) = {}".format(j, np.mean(E_g_W[j])))
+                            # print("[layer {}] np.mean(E_g_b[j]) = {}".format(j, np.mean(E_g_b[j])))
+                            # print("[layer {}] update W mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j])))
+                            # print("[layer {}] update b mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])))
+                            # print("np.mean(grads_W[j]) = ", np.mean(grads_W[j]))
+                            # print("np.mean(grads_W[j] ** 2) = ", np.mean(grads_W[j] ** 2))
+                            self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
+                                                  step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
 
                 if 100 * i // X_train.shape[0] > proc_done + print_every_proc:
                     proc_done = 100 * i // X_train.shape[0]

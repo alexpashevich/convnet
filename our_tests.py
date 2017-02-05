@@ -113,7 +113,7 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 100, print_every_proc = 100, step_size=0.01, use_vanila_sgd=True)
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 100, print_every_proc = 100, step_size=0.1, use_vanila_sgd=False)
 
     # print(Y_train)
     # print(Y_test)
@@ -171,14 +171,14 @@ def test_kaggle_cnn():
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.8)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.05)
 
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    # X_train, y_train = data_augmentation(X_train, y_train)
+    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
 
     print("X_train.shape = ", X_train.shape)
     print("y_train.shape = ", y_train.shape)
@@ -192,7 +192,7 @@ def test_kaggle_cnn():
 
     ch1 = 32
     ch2 = 64
-    ch3 = 256
+    ch3 = 1024
     nb_classes = 10
 
     cnn = ConvNet()
@@ -234,10 +234,10 @@ def test_kaggle_cnn():
             X_cv = X_val,
             y_cv = y_val,
             minibatch_size = 50,
-            n_iter = 30,
-            step_size = 0.1,
-            use_vanila_sgd = True,
-            print_every_proc = 1,
+            n_iter = 100,
+            step_size = 0.01,
+            use_vanila_sgd = False,
+            print_every_proc = 34,
             path_for_dump = dump_folder)
 
     y_test = cnn.predict(X_test)
