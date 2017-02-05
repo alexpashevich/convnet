@@ -189,8 +189,18 @@ class PoolLayer(object):
         print("diff with the assert of maxpool (forward) is =", np.mean(out_silly - out_smart))
         print("diff with the assert of maxpool (back) is =", np.mean(out_back_silly - out_back_smart))
 
+    def dump_layer_info(self):
+        layer_info = ["poollayer", {"stride": self.stride,
+                                   "size": self.size,
+                                   "type": self.type}]
+        return layer_info
 
-
+    # def load_layer_info(self, dict_layer):
+    #     self.stride = dict_layer["self.stride"]
+    #     self.size = dict_layer["self.size"]
+    #     self.type = dict_layer["self.type"]
+    #     self.last_max_ids = None
+    #     self.last_X_col = None
 
 
 

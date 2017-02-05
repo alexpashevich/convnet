@@ -1,7 +1,5 @@
-
 import numpy as np
-import math
-import logging
+import math, logging, pickle
 # sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
 import hipsternet.layer as hl
 from sklearn.utils import shuffle
@@ -242,8 +240,20 @@ class ConvNet:
         return grads_W, grads_b, loss
 
 
-    def fit(self, X_train, y_train, K, minibatch_size, n_iter,
-            X_cv = None, y_cv = None, step_size = 0.1, epsilon = 1e-8, gamma = 0.9, use_vanila_sgd = False, print_every_proc = 1):
+    def fit(self,
+            X_train,
+            y_train,
+            K,
+            minibatch_size,
+            n_iter,
+            X_cv = None,
+            y_cv = None,
+            step_size = 0.1,
+            epsilon = 1e-8,
+            gamma = 0.9,
+            use_vanila_sgd = False,
+            print_every_proc = 1,
+            path_for_dump = None):
         ''' train the network and adjust the weights during n_iter iterations '''
 
         # do the label preprocessing first
@@ -265,14 +275,11 @@ class ConvNet:
             proc_done = 0
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
-                X_minibatch = X_train[i:i + minibatch_size] # TODO: check if it is okey when X_size % minibatch_size != 0
+                X_minibatch = X_train[i:i + minibatch_size]
                 y_minibatch = y_train_vector[i:i + minibatch_size]
 
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
-
                 loss += minibatch_loss
-
-                # print("minibatch_loss = ", minibatch_loss)
 
                 # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
                 for j in range(self.nb_layers):
@@ -282,17 +289,28 @@ class ConvNet:
                 # do gradient step for every layer
                 for j in range(self.nb_layers):
                     if use_vanila_sgd:
-                        self.layers[j].update(step_size * grads_W[j], step_size * grads_b[j])
+                        # print("[layer {}] update W mean = {}".format(j, np.mean(step_size * grads_W[j])))
+                        # print("[layer {}] update b mean = {}".format(j, np.mean(step_size * grads_b[j])))
+                        self.layers[j].update(step_size * grads_W[j],
+                                              step_size * grads_b[j])
                     else:
                         # do RMSprop step
+                        # import pudb; pudb.set_trace()
+                        # print("[layer {}] np.mean(E_g_W[j]) = {}".format(j, np.mean(E_g_W[j])))
+                        # print("[layer {}] np.mean(E_g_b[j]) = {}".format(j, np.mean(E_g_b[j])))
+                        # print("[layer {}] update W mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j])))
+                        # print("[layer {}] update b mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])))
                         self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
                                               step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
 
-                if 100. * i / X_train.shape[0] > proc_done + print_every_proc:
-                    proc_done += print_every_proc
+                if 100 * i // X_train.shape[0] > proc_done + print_every_proc:
+                    proc_done = 100 * i // X_train.shape[0]
                     print("%d%% done" % (proc_done))
 
             print("Loss = %f" % (loss / X_train.shape[0]))
+
+            if path_for_dump != None:
+                self.dump_nn(path_for_dump/"{}.dump".format(iter))
 
 
             if X_cv is not None and y_cv is not None:
@@ -314,4 +332,41 @@ class ConvNet:
             prediction = np.argmax(self.forward_pass(X)[-1])
             y_test.append(prediction)
         return np.array(y_test)
+
+    def dump_nn(self, path_for_dump):
+        layers_dumps = []
+        for layer in self.layers:
+            layers_dumps.append(layer.dump_layer_info())
+
+        dict_nn = {"self.img_shape": self.img_shape,
+                "self.nb_layers": self.nb_layers,
+                "layers_dumps": layers_dumps}
+
+        with path_for_dump.open(mode='wb') as file_for_dump:
+            pickle.dump(dict_nn,file_for_dump)
+
+    def load_nn(self, path_of_dump):
+        with path_of_dump.open(mode='rb') as file_of_dump:
+            dict_nn = pickle.load(file_of_dump)
+
+        self.img_shape = dict_nn["self.img_shape"]
+        self.nb_layers = dict_nn["self.nb_layers"]
+        for layer_info in dict_nn["layers_dumps"]:
+            layer_type = layer_info[0]
+            if layer_type == "fclayer":
+                self.layers.append(FCLayer(layer_info[1]))
+            elif layer_type == "convlayer":
+                self.layers.append(ConvLayer(layer_info[1]))
+            elif layer_type == "poollayer":
+                self.layers.append(PoolLayer(layer_info[1]))
+            else:
+                raise ValueError("error: can not load nn, unknown layer type {}".format(layer_type))
+
+
+
+
+
+
+
+
 

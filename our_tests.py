@@ -6,11 +6,14 @@ from sklearn.datasets import make_moons
 import hipsternet.input_data as input_data
 from pathlib import Path
 import pandas as pd
+from datetime import datetime
 
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation
+import pickle
 
 HIPSTERNET = Path('external/hipsternet')
+DUMPFOLDER = Path('dumps')
 
 def test_conv_layer(valsize, seed):
     # Data loading
@@ -110,7 +113,7 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 30)
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 100, print_every_proc = 100, step_size=0.01, use_vanila_sgd=True)
 
     # print(Y_train)
     # print(Y_test)
@@ -162,39 +165,20 @@ def test_poollayer():
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"})
 
     cnn.layers[0].assert_pool_layer()
-    # img_1 = X_test[0,:].reshape(3, 32, 32)
-    # img_2 = X_test[4,:].reshape(3, 32, 32)
-
-    # vis_img(X_test[40,:])
-
-    # X_out = cnn.forward_pass(np.array([img_1, img_2]))[1]
-
-    # print(X_out.shape)
-    # X_out = X_out.reshape(2, -1)
-    # X_out_1 = X_out[1]
-    # img1 = X_out[0,:,:,:].transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    # print(img1.shape)
-    # plt.imshow(img1)
-
-    # plt.show()
-    # vis_img(X_test[40,:])
-    # vis_img(X_out)
 
 def test_kaggle_cnn():
     X_train_full = get_data_fast("Xtr")[:,:-1]
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.8)
 
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
 
-    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test)
+    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    X_train = X_train.reshape(-1, *img_shape)
-    X_val = X_val.reshape(-1, *img_shape)
-    X_test = X_test.reshape(-1, *img_shape)
+    # X_train, y_train = data_augmentation(X_train, y_train)
 
     print("X_train.shape = ", X_train.shape)
     print("y_train.shape = ", y_train.shape)
@@ -202,10 +186,13 @@ def test_kaggle_cnn():
     print("y_val.shape = ", y_val.shape)
     print("X_test.shape = ", X_test.shape)
 
+    dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    dump_folder.mkdir()
+
 
     ch1 = 32
     ch2 = 64
-    ch3 = 128
+    ch3 = 256
     nb_classes = 10
 
     cnn = ConvNet()
@@ -240,44 +227,21 @@ def test_kaggle_cnn():
                                              "stride": 1,
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, n_iter = 30, step_size=0.01, use_vanila_sgd=True)
 
+    cnn.fit(X_train,
+            y_train,
+            K = nb_classes,
+            X_cv = X_val,
+            y_cv = y_val,
+            minibatch_size = 50,
+            n_iter = 30,
+            step_size = 0.1,
+            use_vanila_sgd = True,
+            print_every_proc = 1,
+            path_for_dump = dump_folder)
 
-
-def whitening(data):
-    nb_channels = 3
-    channel_length = data.shape[1] / nb_channels
-    # means = np.zeros(nb_chanels)
-    # for d in data:
-    #     for ch in range(nb_channels):
-    #         for i in range(channel_length):
-    #             means[ch] += d[ch * channel_length + i]
-    # means /= data.shape[0] * channel_length
-
-    # sigmas = np.zeros(nb_channels)
-    # for d in data:
-    #     for ch in range(nb_channels):
-    #         for i in range(channel_length):
-    #             sigmas += (d[ch * channel_length + i] - means[ch]) ** 2
-    # sigmas /= data.shape[0] * channel_length
-
-    # for ch in range(nb_channels):
-    #     data[:, ch * channel_length: (ch + 1) * channel_length] = (data[:, ch * channel_length: (ch + 1) * channel_length] - means[ch]) / 
-    # print("mean before ", data[:, 0:1024].var())
-
-    r_data = whiten(data[:, 0:1024])
-    g_data = whiten(data[:, 1024:2048])
-    b_data = whiten(data[:, 2048:3072])
-
-    # print("mean after ", r_data.var())
-    # print(r_data)
-
-    # features  = np.array([[1.9, 2.3, 1.7],[1.5, 2.5, 2.2],[0.8, 0.6, 1.7,]])
-    # print("mean before ", features.var())
-    # new_features = whiten(features)
-    # print("mean after ", new_features.var())
-
-    return np.concatenate((r_data, g_data, b_data), axis=1)
+    y_test = cnn.predict(X_test)
+    pickle.dump(y_test, (dump_folder/"Yte.dat").open('wb'))
 
 
 def test_mnist():

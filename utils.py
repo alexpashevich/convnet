@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
-import pickle
+import pickle, logging
+log = logging.getLogger(__name__)
 
 def ReLU(input_array):
     # rectified linear unit activation function
@@ -21,7 +22,7 @@ def vis_img(x):
     plt.show()
 
 def get_data_fast(name):
-    data_csv_path = Path('.').resolve().parent/"data"/(name + ".csv")
+    data_csv_path = Path('.').resolve()/"Data"/(name + ".csv")
     data_pkl_path = data_csv_path.parent/(name+".pkl")
     if data_pkl_path.exists():
         with data_pkl_path.open('rb') as f:
@@ -43,22 +44,30 @@ def prepro_mnist(X_train, X_val, X_test):
     mean = np.mean(X_train)
     return X_train - mean, X_val - mean, X_test - mean
 
-def prepro_cifar(X_train, X_val, X_test):
-    mean_r = np.mean(X_train[:,0:1024])
-    mean_g = np.mean(X_train[:,1024:2048])
-    mean_b = np.mean(X_train[:,2048:3072])
-    means = np.zeros(3)
-
+def prepro_cifar(X_train, X_val, X_test, img_shape):
     for i in range(0, 3072, 1024):
         mean = np.mean(X_train[:,i:i+1024])
-        print("mean before = ", mean)
-        X_train[:,i:i+1024] = X_train[:,i:i+1024] - mean
-        X_val[:,i:i+1024] = X_val[:,i:i+1024] - mean
-        X_test[:,i:i+1024] = X_test[:,i:i+1024] - mean
-        print("mean after = ", np.mean(X_train[:,i:i+1024]))
+        std = np.std(X_train[:,i:i+1024])
+        log.info("mean before preprocessing = {}".format(mean))
+        log.info("std before preprocessing {}".format(std))
+        X_train[:,i:i+1024] = (X_train[:,i:i+1024] - mean) / std
+        X_val[:,i:i+1024] = (X_val[:,i:i+1024] - mean) / std
+        X_test[:,i:i+1024] = (X_test[:,i:i+1024] - mean) / std
+        log.info("mean after preprocessing = {}".format(np.mean(X_train[:,i:i+1024])))
+        log.info("std after preprocessing = {}".format(np.std(X_train[:,i:i+1024])))
 
+    X_train = X_train.reshape(-1, *img_shape)
+    X_val = X_val.reshape(-1, *img_shape)
+    X_test = X_test.reshape(-1, *img_shape)
 
     return X_train, X_val, X_test
+
+def data_augmentation(X, y):
+    X_flipped = np.flip(X, 3)
+    # import pudb; pudb.set_trace()
+    X_aug = np.concatenate((X, X_flipped))
+    y_aug = np.concatenate((y, y))
+    return X_aug, y_aug
 
 """
 im2col trick

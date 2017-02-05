@@ -8,8 +8,15 @@ class FCLayer(object):
         self.input_size = layer_info["input_size"]
         self.output_size = layer_info["output_size"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
-        self.W = np.random.randn(self.input_size, self.output_size) * 0.01 # as in the AlexNet paper
-        self.b = np.random.randn(self.output_size) * 0.01
+        if "W" in layer_info:
+            self.W = layer_info["W"]
+        else:
+            self.W = np.random.randn(self.input_size, self.output_size) * 0.01 # as in the AlexNet paper
+        if "b" in layer_info:
+            self.b = layer_info["b"]
+        else:
+            self.b = np.random.randn(self.output_size) * 0.01
+
 
     def get_W_shape(self):
         return self.W.shape
@@ -50,3 +57,28 @@ class FCLayer(object):
     def update(self, update_W, update_b):
         self.W -= update_W
         self.b -= update_b
+
+    def dump_layer_info(self):
+        dict_layer = {"input_size": self.input_size,
+                      "output_size": self.output_size,
+                      "activation_type": self.activation_type,
+                      "W": self.W,
+                      "b": self.b}
+        layer_info = ["fclayer", dict_layer]
+        return layer_info
+
+    # def load_layer_info(self, dict_layer):
+    #     self.input_size = dict_layer["self.input_size"]
+    #     self.output_size = dict_layer["self.output_size"]
+    #     self.activation_type = dict_layer["self.activation_type"]
+    #     self.W = dict_layer["self.W"]
+    #     self.b = dict_layer["self.b"]
+
+
+
+
+
+
+
+
+

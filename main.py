@@ -46,10 +46,10 @@ def start_logging_to_file(filename=None):
         logfilename = LOGFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S.log')
     else:
         logfilename = LOGFOLDER/filename
-    log.info('Starting logging to file {}'.format(logfilename))
     out_filehandler = logging.FileHandler(str(logfilename))
     out_filehandler.setFormatter(LOG_FORMATTER)
     log.addHandler(out_filehandler)
+    log.info('Starting logging to file {}'.format(logfilename))
 
 def main(args):
     if args['test']:

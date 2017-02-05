@@ -12,10 +12,14 @@ class ConvLayer(object):
         self.stride = layer_info["stride"]
         self.padding = layer_info["padding"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
-        self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
-        self.b = np.random.randn(self.out_channels) * 0.01
-        # self.W = np.ones((self.out_channels, self.in_channels, self.height, self.width)) * 0.01
-        # self.b = np.ones(self.out_channels)*0.01
+        if "W" in layer_info:
+            self.W = layer_info["W"]
+        else:
+            self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
+        if "b" in layer_info:
+            self.b = layer_info["b"]
+        else:
+            self.b = np.random.randn(self.out_channels) * 0.01
         
     def slow_fprop(self, X, out_height, out_width): # let it just be here for some time
         time = timer()
@@ -181,3 +185,37 @@ class ConvLayer(object):
         # print("self.b.shape =", self.b.shape)
         # print("update_b.shape =", update_b.shape)
         self.b -= update_b
+
+    def dump_layer_info(self):
+        dict_layer = {"in_channels": self.in_channels,
+                      "out_channels": self.out_channels,
+                      "height": self.height,
+                      "width": self.width,
+                      "stride": self.stride,
+                      "padding": self.padding,
+                      "activation_type": self.activation_type,
+                      "W": self.W,
+                      "b": self.b}
+        layer_info = ["convlayer", dict_layer]
+        return layer_info
+
+    # def load_layer_info(self, dict_layer):
+    #     self.in_channels = dict_layer["self.in_channels"]
+    #     self.out_channels = dict_layer["self.out_channels"]
+    #     self.height = dict_layer["self.height"]
+    #     self.width = dict_layer["self.width"]
+    #     self.stride = dict_layer["self.stride"]
+    #     self.padding = dict_layer["self.padding"]
+    #     self.activation_type = dict_layer["self.activation_type"]
+    #     self.W = dict_layer["self.W"]
+    #     self.b = dict_layer["self.b"]
+
+
+
+
+
+
+
+
+
+
