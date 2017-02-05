@@ -61,32 +61,6 @@ class ConvNet:
         else:
             print("error: unknown layer type")
 
-    def forward_pass_hipster(self, X):
-        cur_input_hipster = X
-        outputs_hipster = []
-        cache_hipster = []
-        outputs_hipster.append(cur_input_hipster)
-
-        for layer in self.layers:
-            # print("forward_pass iter")
-            if type(layer) is ConvLayer and len(cur_input_hipster.shape) < 4:
-                # X -> ConvLayer, we have to resize the input
-                cur_input_hipster = cur_input_hipster.reshape(-1, *self.img_shape)
-
-            cur_input_hipster, cache = hl.conv_forward(cur_input_hipster, layer.W, np.expand_dims(layer.b, 1), stride = layer.stride, 
-                                                        padding = layer.padding)
-            outputs_hipster.append(np.array(cur_input_hipster))
-            cache_hipster.append(cache)
-
-        if len(cur_input_hipster.shape) > 2:
-            # we used a NN without FC layers
-            cur_input_hipster = cur_input_hipster.reshape(-1, cur_input_hipster.shape[1] * cur_input_hipster.shape[2] * cur_input_hipster.shape[3])
-
-        # the softmax layer, we subtract maximum to avoid overflow
-        cur_input_hipster = softmax(cur_input_hipster)
-        outputs_hipster.append(cur_input_hipster)
-
-        return outputs_hipster, cache_hipster
 
     def forward_pass(self, X):
         ''' return the input data X and outputs of every layer '''
@@ -118,48 +92,6 @@ class ConvNet:
 
         return outputs
 
-    def backward_pass_hipster(self, errors_batch_hipster, outputs_batch_hipster, cache_hipster):
-        ''' do the backward pass and return grads for W update '''
-        i = 1
-
-        grad_W_hipster = len(self.layers) * [None]
-        grad_b_hipster = len(self.layers) * [None]
-
-        for layer in reversed(self.layers):
-
-            if type(layer) is ConvLayer:
-                type_name = "convlayer"
-            else:
-                type_name = "fclayer"
-
-            cur_out_hipster = np.array(outputs_batch_hipster[-i])
-            prev_out_hipster = np.array(outputs_batch_hipster[-1 - i])
-
-            if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
-                # print("reshaping for ConvLayer")
-                # layer is the last ConvLayer, we have to resize the input
-                errors_batch_hipster = errors_batch_hipster.reshape(-1, cur_out_hipster.shape[1], cur_out_hipster.shape[2], cur_out_hipster.shape[3])
-
-            if type(layer) is ConvLayer and len(prev_out.shape) < 4:
-                # print("reshaping for ConvLayer")
-                # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
-                prev_out_hipster = prev_out_hipster.reshape(-1, *self.img_shape)
-
-            # if type(layer) is FCLayer and len(prev_out.shape) > 3:
-                # print("reshaping for FCLayer")
-                # layer is the first FC after convolutional layers, we have to reshape prev_out
-                # prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
-
-            # we skip the last output as it contains the final classification output
-            (errors_batch_hipster, dW_hipster, db_hipster) = hl.conv_backward(errors_batch_hipster, cache_hipster[-i])
-
-            grad_W_hipster[-i] = dW_hipster
-            grad_b_hipster[-i] = db_hipster
-            i += 1
-
-            # print('backward_pass for', type_name, 'computed in {:6f}'.format(timer() - time))
-
-        return grad_W_hipster, grad_b_hipster
 
     def backward_pass(self, errors_batch, outputs_batch):
         ''' do the backward pass and return grads for W update '''
@@ -212,29 +144,17 @@ class ConvNet:
         # outputs_batch = x + layers outputs => len = nb_layers + 1
         # outputs_batch[layer_i] would be array of minibatch_size outputs of layer_i
         # we do the forward_pass for the whole batch at once
+
         # time = timer()
         outputs_batch = self.forward_pass(X)
-        # for out_our, out_hipster in zip(outputs_batch, outputs_batch_hipster):
-        #     error = out_our - out_hipster
-        #     # error[error < 1e-3] = 0
-        #     print("np.max(error) = ", np.max(error))
-        #     print('hip_to_mine_conv_mistake = {}'.format(np.mean(error)))
         # print('forward_pass computed in {:6f}'.format(timer() - time))
 
         # we get the errors for the whole batch at once
         errors_batch = outputs_batch[-1] - Y
         loss = CE_loss_batch(Y, outputs_batch[-1])
-        # print("get_minibatch_grads loss = ", loss)
 
         # time = timer()
         grads_W, grads_b = self.backward_pass(np.array(errors_batch), outputs_batch[:-1])
-        # for grad_W_our, grad_b_our, grad_W_hipster, grad_b_hipster in zip(grads_W, grads_b, grads_W_hipster, grads_b_hipster):
-        #     error_W = grad_W_our - grad_W_hipster
-        #     error_b = grad_b_our - grad_b_hipster
-        #     print("np.max(error_W) = ", np.max(error_W))
-        #     print('hip_to_mine_grad_W_mistake = {}'.format(np.mean(error_W)))
-        #     print("np.max(error_b) = ", np.max(error_b))
-        #     print('hip_to_mine_grad_b_mistake = {}'.format(np.mean(error_b)))
         # print('backward_pass computed in {:6f}'.format(timer() - time))
 
         return grads_W, grads_b, loss
@@ -245,29 +165,55 @@ class ConvNet:
             y_train,
             K,
             minibatch_size,
-            n_iter,
+            nb_epoches,
             X_cv = None,
             y_cv = None,
-            step_size = 0.1,
+            optimizer = 'rmsprop',
+            step_size = 0.01,
             epsilon = 1e-8,
             gamma = 0.9,
-            use_vanila_sgd = False,
+            beta1 = 0.9,
+            beta2 = 0.999,
             print_every_proc = 1,
             path_for_dump = None):
-        ''' train the network and adjust the weights during n_iter iterations '''
+        '''
+            train the network and adjust the weights during nb_epoches iterations
+            X_train:            data samples to train on
+            y_train:            labels to train on
+            K:                  number of classes
+            minibatch_size:     size of minibatch used in training
+            nb_epoches:         number of epoches of training
+            X_cv:               data samples for validation
+            y_cv:               labels for validation
+            step_size:          graident descent step size
+            epsilon:            convergence criterion, also used in rmsprop and adam to avoid zero division
+            gamma:              rmsprop parameter of sliding window of squared gradient
+            beta1:              adam parameter of sliding window of gradient
+            beta2:              adam parameter of sliding window of squared gradient
+            optimizer:          type of optimizer, currently supported 'sgd', 'rmsprop', 'adam'
+            print_every_proc:   printing options, the training progress will be printed every x procents
+            path_for_dump:      if the path set, a dump of the network will be made every epoche
+        '''
 
         # do the label preprocessing first
         y_train_vector = np.zeros((y_train.shape[0], K))
         for i in range(y_train.shape[0]):
             y_train_vector[i, y_train[i]] = 1
 
-        # we will need this for RMSprop
-        E_g_W = [np.zeros(layer.get_W_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. W
-        E_g_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
+        # we will need this for RMSprop and Adam in caser they are used
+        m_b, m_b, v_W, v_b = [], [], [], []
+
+        if optimizer == 'rmsprop' or optimizer == 'adam':
+            v_W = [np.zeros(layer.get_W_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. W
+            v_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
+
+        if optimizer == 'adam':
+            m_W = [np.zeros(layer.get_W_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. W
+            m_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
 
         loss = math.inf
         # do fixed number of iterations
-        for iter in range(n_iter):
+        for iter in range(nb_epoches):
             print("Iteration %d" % iter)
             X_train, y_train_vector = shuffle(X_train, y_train_vector)
             prev_loss = loss
@@ -281,33 +227,38 @@ class ConvNet:
                 (grads_W, grads_b, minibatch_loss) = self.get_minibatch_grads(X_minibatch, y_minibatch) # implement with the backward_pass
                 loss += minibatch_loss
 
-                # update matrixes E_g_W and E_g_b used in the stepsize of RMSprop
-                for j in range(self.nb_layers):
-                    if type(self.layers[j]) is not PoolLayer:
-                        # if i > 1:
-                            # import pudb; pudb.set_trace()
-                        E_g_W[j] = gamma * E_g_W[j] + (1 - gamma) * (grads_W[j] ** 2)
-                        E_g_b[j] = gamma * E_g_b[j] + (1 - gamma) * (grads_b[j] ** 2)
+                # update matrixes v_W, v_b, m_W, m_b which will be used in rmsprop or adam gradient step
+                if optimizer == 'rmsprop':
+                    for j in range(self.nb_layers):
+                        if type(self.layers[j]) is not PoolLayer:
+                            v_W[j] = gamma * v_W[j] + (1 - gamma) * (grads_W[j] ** 2)
+                            v_b[j] = gamma * v_b[j] + (1 - gamma) * (grads_b[j] ** 2)
+
+                if optimizer == 'adam':
+                    for j in range(self.nb_layers):
+                        if type(self.layers[j]) is not PoolLayer:
+                            m_W[j] = beta1 * m_W[j] + (1 - beta1) * grads_W[j]
+                            m_b[j] = beta1 * m_b[j] + (1 - beta1) * grads_b[j]
+
+                            v_W[j] = beta2 * v_W[j] + (1 - beta2) * (grads_W[j] ** 2)
+                            v_b[j] = beta2 * v_b[j] + (1 - beta2) * (grads_b[j] ** 2)
 
                 # do gradient step for every layer
                 for j in range(self.nb_layers):
-                    if use_vanila_sgd:
-                        if type(self.layers[j]) is not PoolLayer:
-                            # print("[layer {}] update W mean = {}".format(j, np.mean(step_size * grads_W[j])))
-                            # print("[layer {}] update b mean = {}".format(j, np.mean(step_size * grads_b[j])))
+                    if optimizer == 'sgd':
+                        if type(self.layers[j]) is not PoolLayer: # TODO: remove this kind of condition
                             self.layers[j].update(step_size * grads_W[j],
                                                   step_size * grads_b[j])
-                    else:
-                        # do RMSprop step
+                    elif optimizer == 'rmsprop':
                         if type(self.layers[j]) is not PoolLayer:
-                            # print("[layer {}] np.mean(E_g_W[j]) = {}".format(j, np.mean(E_g_W[j])))
-                            # print("[layer {}] np.mean(E_g_b[j]) = {}".format(j, np.mean(E_g_b[j])))
-                            # print("[layer {}] update W mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j])))
-                            # print("[layer {}] update b mean = {}".format(j, np.mean(step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])))
-                            # print("np.mean(grads_W[j]) = ", np.mean(grads_W[j]))
-                            # print("np.mean(grads_W[j] ** 2) = ", np.mean(grads_W[j] ** 2))
-                            self.layers[j].update(step_size / np.sqrt(E_g_W[j] + epsilon) * grads_W[j],
-                                                  step_size / np.sqrt(E_g_b[j] + epsilon) * grads_b[j])
+                            self.layers[j].update(step_size / np.sqrt(v_W[j] + epsilon) * grads_W[j],
+                                                  step_size / np.sqrt(v_b[j] + epsilon) * grads_b[j])
+                    elif optimizer == 'adam':
+                        if type(self.layers[j]) is not PoolLayer:
+                            self.layers[j].update(step_size / (np.sqrt(v_W[j] / (1 - beta2)) + epsilon) * m_W[j] / (1 - beta1),
+                                                  step_size / (np.sqrt(v_b[j] / (1 - beta2)) + epsilon) * m_b[j] / (1 - beta1))
+                    else:
+                        raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
                 if 100 * i // X_train.shape[0] > proc_done + print_every_proc:
                     proc_done = 100 * i // X_train.shape[0]
@@ -325,7 +276,7 @@ class ConvNet:
                     y_cv_vector[i, y_cv[i]] = 1
                 y_cv_pred = self.predict(X_cv)
                 accs = (y_cv_pred == y_cv).sum() / y_cv.size
-                print("Accuracy on cross validation = %f" % accs)
+                print("Accuracy on validation = %f" % accs)
 
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
                 print("Termination criteria is true, I stop the learning...")

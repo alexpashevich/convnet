@@ -114,7 +114,7 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, n_iter = 100, print_every_proc = 100, step_size=0.1, use_vanila_sgd=False)
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, nb_epoches = 100, print_every_proc = 100, step_size=0.1, optimizer='rmsprop')
 
     # print(Y_train)
     # print(Y_test)
@@ -156,7 +156,7 @@ def test_kaggle_fcnn():
     cnn.add_layer("fclayer", layer_info = {"input_size": size5, "output_size": size6, "activation_type": "None"})
     # cnn.add_layer("fclayer", layer_info = {"input_size": size6, "output_size": size7, "activation_type": "None"})
 
-    #cnn.fit(X_train, y_train, K = nb_classes, X_val = X_val, y_val = y_val, minibatch_size = 50, n_iter = 30)
+    #cnn.fit(X_train, y_train, K = nb_classes, X_val = X_val, y_val = y_val, minibatch_size = 50, nb_epoches = 30)
     #y_test = cnn.predict(X_test)
     #y_test.dump("Yte.dat")
 
@@ -179,12 +179,10 @@ def test_kaggle_cnn():
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
+    # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
 
     print("X_train.shape = ", X_train.shape)
-    print("y_train.shape = ", y_train.shape)
     print("X_val.shape = ", X_val.shape)
-    print("y_val.shape = ", y_val.shape)
     print("X_test.shape = ", X_test.shape)
 
     dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -193,7 +191,7 @@ def test_kaggle_cnn():
 
     ch1 = 32
     ch2 = 64
-    ch3 = 1024
+    ch3 = 256
     nb_classes = 10
 
     cnn = ConvNet()
@@ -235,14 +233,21 @@ def test_kaggle_cnn():
             X_cv = X_val,
             y_cv = y_val,
             minibatch_size = 50,
-            n_iter = 100,
+            nb_epoches = 100,
             step_size = 0.01,
-            use_vanila_sgd = False,
+            optimizer='adam',
             print_every_proc = 34,
             path_for_dump = dump_folder)
 
     y_test = cnn.predict(X_test)
-    pickle.dump(y_test, (dump_folder/"Yte.dat").open('wb'))
+    with (dump_folder/"Yte.csv").open('w') as csvfile:
+        # writer = csv.writer(file)
+        writer = csv.DictWriter(csvfile, fieldnames=['Id', 'Prediction'])
+        writer.writeheader()
+        for id, y in zip(range(1, y_test.shape[0] + 1), y_test):
+            writer.writerow({'Id': id, 'Prediction': y})
+        # writer.writerows(zip(range(1, y_test.shape[0] + 1), y_test))
+    log.info("Prediction was done successfully!")
 
 
 def test_mnist():
@@ -325,7 +330,7 @@ def test_mnist():
                                              "stride": 1,
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, n_iter = 30, step_size=0.01, use_vanila_sgd=True)
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, nb_epoches = 30, step_size=0.01, optimizer='sgd')
 
 
 def predict_with_dump(dump_path):
