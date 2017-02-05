@@ -10,10 +10,11 @@ from datetime import datetime
 
 from convnet import ConvNet
 from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation
-import pickle
+import pickle, csv, logging
 
 HIPSTERNET = Path('external/hipsternet')
 DUMPFOLDER = Path('dumps')
+log = logging.getLogger(__name__)
 
 def test_conv_layer(valsize, seed):
     # Data loading
@@ -325,3 +326,36 @@ def test_mnist():
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10
     cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, n_iter = 30, step_size=0.01, use_vanila_sgd=True)
+
+
+def predict_with_dump(dump_path):
+    X_train_full = get_data_fast("Xtr")[:,:-1]
+    X_test = get_data_fast("Xte")[:,:-1]
+    y_train_full = get_data_fast("Ytr")[:,1].astype(int)
+
+    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.01)
+    img_shape = (3, 32, 32)
+    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
+
+    cnn = ConvNet()
+    cnn.load_nn(Path(dump_path))
+    y_test = cnn.predict(X_test)
+    dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    dump_folder.mkdir()
+    with (dump_folder/"Yte.csv").open('w') as csvfile:
+        # writer = csv.writer(file)
+        writer = csv.DictWriter(csvfile, fieldnames=['Id', 'Prediction'])
+        writer.writeheader()
+        for id, y in zip(range(1, y_test.shape[0] + 1), y_test):
+            writer.writerow({'Id': id, 'Prediction': y})
+        # writer.writerows(zip(range(1, y_test.shape[0] + 1), y_test))
+    log.info("Prediction was done successfully!")
+
+
+
+
+
+
+
+
+
