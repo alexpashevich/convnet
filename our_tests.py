@@ -228,6 +228,18 @@ def test_kaggle_cnn():
                                              "stride": 1,
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10
+   
+    # x_batch = X_train[:3,:,:,:]
+    # output_layer1 = cnn.layers[0].forwardprop(x_batch)
+    # back0 = cnn.layers[0].backprop(output_layer1 - 0.1, output_layer1, x_batch)
+    #
+    # output_layer2 = cnn.layers[1].forwardprop(output_layer1)
+    # back2 = cnn.layers[1].backprop_new(output_layer2 - 0.1, output_layer2, output_layer1)
+    #
+    # output_layer_original = cnn.layers[1].forwardprop_old(output_layer1)
+    # back1 = cnn.layers[1].backprop(output_layer_original - 0.1, output_layer_original, output_layer1)
+    #
+    # import pudb; pudb.set_trace()  # XXX BREAKPOINT
 
     cnn.fit(X_train,
             y_train,

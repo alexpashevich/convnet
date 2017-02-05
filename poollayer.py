@@ -67,7 +67,49 @@ class PoolLayer(object):
         self.last_max_ids = None
         self.last_X_col = None
 
+    def get_im2col_ind(self, out_height, out_width):
+        i0 = np.repeat(np.arange(self.size), self.size) 
+        i0 = np.tile(i0, 1)
+        i1 = self.stride * np.repeat(np.arange(out_height), out_width)
+        j0 = np.tile(np.arange(self.size), self.size)
+        j1 = self.stride * np.tile(np.arange(out_width), out_height)
+        i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+        j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+        k = np.repeat(np.arange(1), self.size * self.size).reshape(-1, 1)
+        k = k.astype(int)
+        i = i.astype(int)
+        j = j.astype(int)
+        return k, i, j
+
     def forwardprop(self, X):
+         # print("X.shape = ", X.shape)
+        n, d, h, w = X.shape
+        # we want even height and width of the picture
+        assert h % self.size == 0
+        assert w % self.size == 0
+        h_out = h//self.size
+        w_out = w//self.size 
+        X_reshaped = X.reshape(n * d, 1, h, w) # this is necessary to apply the im2col trick, as the pool filters have depth 1
+        k, i, j = self.get_im2col_ind(h_out, w_out)
+        X_col = X_reshaped[:, k, i, j]
+        X_col = X_col.transpose(1, 2, 0).reshape(self.size*self.size, -1)
+        # we apply the maxpooling and save indexes in an intermediate variable in order to do the backprop after
+        max_ids = np.argmax(X_col, axis=0) # this should be of size 1 x (n*d*h*w*/size/size)
+        # print("X_col.shape = ", X_col.shape)
+        # we cache indexes and X_col for the backprop
+        self.last_max_ids = max_ids
+        self.last_X_col = X_col
+        # the desired output
+        out = X_col[max_ids, range(max_ids.size)]
+        # we reshape in order to get shape = 
+        # (h/size) x (w/size) x n x d
+        out = out.reshape(h_out, w_out, n, d)
+        # and finaly shape = n x d x (h/size) x (w/size)
+        out = out.transpose(2, 3, 0, 1)
+        # print("out.shape = ", out.shape)
+        return out
+
+    def forwardprop_old(self, X):
         # print("X.shape = ", X.shape)
         n, d, h, w = X.shape
 
@@ -95,7 +137,8 @@ class PoolLayer(object):
         # the desired output
         out = X_col[max_ids, range(max_ids.size)]
 
-        # we reshape in order to get shape = (h/size) x (w/size) x n x d
+        # we reshape in order to get shape = 
+        # (h/size) x (w/size) x n x d
         out = out.reshape(h // self.size, w // self.size, n, d)
 
         # and finaly shape = n x d x (h/size) x (w/size)
@@ -106,6 +149,21 @@ class PoolLayer(object):
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
+        dA_col = np.zeros(self.last_X_col.shape)
+        # transposition nd flattening to get the correct arrangement
+        error_batch_flat = error_batch.transpose(2, 3, 0, 1).ravel()
+        dA_col[self.last_max_ids, range(self.last_max_ids.size)] = error_batch_flat
+        n, d, h, w = prev_out_batch.shape
+        k, i, j = self.get_im2col_ind(h, w)
+        dA_col_res = dA_col.reshape(self.size*self.size, -1, n*d).transpose(2,0,1)
+        dA = dA_col_res.reshape(prev_out_batch.shape)
+        self.last_max_ids = None
+        self.last_X_col = None
+
+        return np.ones(1), np.ones(1), dA
+
+
+    def backprop_old(self, error_batch, cur_out_batch, prev_out_batch):
         dA_col = np.zeros(self.last_X_col.shape)
 
         # transposition nd flattening to get the correct arrangement
