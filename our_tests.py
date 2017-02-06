@@ -114,7 +114,7 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, nb_epoches = 100, print_every_proc = 100, step_size=0.1, optimizer='rmsprop')
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, nb_epoches = 100, step_size=0.1, optimizer='rmsprop')
 
     # print(Y_train)
     # print(Y_test)
@@ -167,7 +167,7 @@ def test_poollayer():
 
     cnn.layers[0].assert_pool_layer()
 
-def test_kaggle_cnn():
+def test_kaggle_cnn(cnn_load_path = None):
     X_train_full = get_data_fast("Xtr")[:,:-1]
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
@@ -189,43 +189,54 @@ def test_kaggle_cnn():
     dump_folder.mkdir()
 
 
-    ch1 = 32
+    ch1 = 64
     ch2 = 64
     ch3 = 256
     nb_classes = 10
 
+    fc_size_in1 = 8*8*ch2
+    fc_size_in2 = 1024
+
     cnn = ConvNet()
-    cnn.set_img_shape(img_shape)
-    cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
-                                             "out_channels": ch1,
-                                             "height": 5,
-                                             "width": 5,
-                                             "stride": 1,
-                                             "padding": 2,
-                                             "activation_type": "ReLU"}) # 32 x 32 x ch1
-    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
-    cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
-                                             "out_channels": ch2,
-                                             "height": 5,
-                                             "width": 5,
-                                             "stride": 1,
-                                             "padding": 2,
-                                            "activation_type": "ReLU"}) # 16 x 16 x ch2
-    cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
-    cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
-                                             "out_channels": ch3,
-                                             "height": 8,
-                                             "width": 8,
-                                             "stride": 1,
-                                             "padding": 0,
-                                             "activation_type": "ReLU"}) # 1 x 1 x ch3
-    cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
-                                             "out_channels": nb_classes,
-                                             "height": 1,
-                                             "width": 1,
-                                             "stride": 1,
-                                             "padding": 0,
-                                             "activation_type": "None"}) # 1 x 1 x 10
+    if cnn_load_path is None:
+        cnn.set_img_shape(img_shape)
+        cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
+                                                 "out_channels": ch1,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                 "activation_type": "ReLU"}) # 32 x 32 x ch1
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
+                                                 "out_channels": ch2,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                "activation_type": "ReLU"}) # 16 x 16 x ch2
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
+
+        cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in1, "output_size": fc_size_in2, "activation_type": "ReLU"})
+        cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in2, "output_size": nb_classes, "activation_type": "None"})
+
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+        #                                          "out_channels": ch3,
+        #                                          "height": 8,
+        #                                          "width": 8,
+        #                                          "stride": 1,
+        #                                          "padding": 0,
+        #                                          "activation_type": "ReLU"}) # 1 x 1 x ch3
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": fc_size_in2,
+        #                                          "out_channels": nb_classes,
+        #                                          "height": 1,
+        #                                          "width": 1,
+        #                                          "stride": 1,
+        #                                          "padding": 0,
+        #                                          "activation_type": "None"}) # 1 x 1 x 10
+    else:
+        cnn.load_nn(Path(cnn_load_path))
+
 
     cnn.fit(X_train,
             y_train,
@@ -233,10 +244,9 @@ def test_kaggle_cnn():
             X_cv = X_val,
             y_cv = y_val,
             minibatch_size = 50,
-            nb_epoches = 100,
-            step_size = 0.01,
+            nb_epoches = 20,
+            step_size = 0.0001,
             optimizer='adam',
-            print_every_proc = 34,
             path_for_dump = dump_folder)
 
     y_test = cnn.predict(X_test)

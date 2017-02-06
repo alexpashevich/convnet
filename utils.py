@@ -4,6 +4,7 @@ import pickle, logging
 from scipy.ndimage.interpolation import rotate
 log = logging.getLogger(__name__)
 
+
 def ReLU(input_array):
     # rectified linear unit activation function
     return np.maximum(input_array, 0)
@@ -22,6 +23,34 @@ def vis_img(x):
     plt.imshow(img)
     plt.show()
 
+
+def labels2vectors(y_labels, nb_casses):
+    y_vector = np.zeros((y_labels.shape[0], nb_casses))
+    y_vector[range(y_labels.shape[0]), y_labels[range(y_labels.shape[0])]] = 1
+    return y_vector
+
+
+def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
+
+
 def get_data_fast(name):
     data_csv_path = Path('.').resolve()/"Data"/(name + ".csv")
     data_pkl_path = data_csv_path.parent/(name+".pkl")
@@ -34,6 +63,7 @@ def get_data_fast(name):
             pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
     return data
 
+
 def unpickle(file):
     import _pickle as cPickle
     fo = open(file, 'rb')
@@ -41,9 +71,11 @@ def unpickle(file):
     fo.close()
     return dict
 
+
 def prepro_mnist(X_train, X_val, X_test):
     mean = np.mean(X_train)
     return X_train - mean, X_val - mean, X_test - mean
+
 
 def prepro_cifar(X_train, X_val, X_test, img_shape):
     # for i in range(0, 3072, 1024):
@@ -59,6 +91,7 @@ def prepro_cifar(X_train, X_val, X_test, img_shape):
 
     return X_train, X_val, X_test
 
+
 def data_augmentation(X, y, rotation_angle):
     X_flipped = np.flip(X, 3)
     X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
@@ -67,6 +100,7 @@ def data_augmentation(X, y, rotation_angle):
     X_aug = np.concatenate((X, X_flipped, X_rotated_right, X_rotated_left))
     y_aug = np.concatenate((y, y, y, y))
     return X_aug, y_aug
+
 
 """
 im2col trick

@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 # import tensorflow as tf
 # import matplotlib.pyplot as plt
 
-from utils import vis_img, get_data_fast, get_im2col_indices
+from utils import vis_img, get_data_fast, get_im2col_indices, print_progress_bar
 from timeit import default_timer as timer
 from fclayer import FCLayer
 from poollayer import PoolLayer
@@ -71,7 +71,7 @@ class ConvNet:
         for layer in self.layers:
             # print("forward_pass iter")
             if type(layer) is ConvLayer and len(cur_input.shape) < 4:
-                # X -> ConvLayer, we have to resize the input
+                # image as 1D array -> ConvLayer, we have to resize the input
                 cur_input = cur_input.reshape(-1, *self.img_shape)
 
             if type(layer) is FCLayer and len(cur_input.shape) > 2:
@@ -103,32 +103,37 @@ class ConvNet:
 
             if type(layer) is ConvLayer:
                 type_name = "convlayer"
-            else:
+            elif type(layer) is PoolLayer:
+                type_name = "poollayer"
+            elif type(layer) is FCLayer:
                 type_name = "fclayer"
-            time = timer()
+            # time = timer()
 
             cur_out = np.array(outputs_batch[-i])
             prev_out = np.array(outputs_batch[-1 - i])
 
-            if type(layer) is ConvLayer and len(errors_batch.shape) < 4:
-                # print("reshaping for ConvLayer")
-                # layer is the last ConvLayer, we have to resize the input
-                errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
+            # print("type_name", type_name)
+            # print("cur_out.shape", cur_out.shape)
+            # print("prev_out.shape", prev_out.shape)
+            # print("errors_batch.shape", errors_batch.shape)
 
-            if type(layer) is ConvLayer and len(prev_out.shape) < 4:
-                # print("reshaping for ConvLayer")
+            if (type_name == "convlayer" or type_name == "poollayer") and len(prev_out.shape) < 4:
+                # print("reshaping for {}".format(type_name))
                 # layer is the first ConvLayer, we have to resize the prev_out (the image itself)
                 prev_out = prev_out.reshape(-1, *self.img_shape)
 
+            if (type_name == "convlayer" or type_name == "poollayer") and len(errors_batch.shape) < 4:
+                # print("reshaping for {}".format(type_name))
+                # layer is the last ConvLayer, we have to resize the input
+                errors_batch = errors_batch.reshape(-1, cur_out.shape[1], cur_out.shape[2], cur_out.shape[3])
+
             if type(layer) is FCLayer and len(prev_out.shape) > 3:
-                # print("reshaping for FCLayer")
+                # print("reshaping for fclayer")
                 # layer is the first FC after convolutional layers, we have to reshape prev_out
                 prev_out = prev_out.reshape(-1, prev_out.shape[1] * prev_out.shape[2] * prev_out.shape[3])
 
             # we skip the last output as it contains the final classification output
             (dW, db, errors_batch) = layer.backprop(errors_batch, cur_out, prev_out)
-
-            # print(db_hipster.shape)
 
             grad_W[-i] = dW # we use the returned order here in order to obtain the regular order in the end
             grad_b[-i] = db # the same here
@@ -175,24 +180,25 @@ class ConvNet:
             beta1 = 0.9,
             beta2 = 0.999,
             print_every_proc = 1,
-            path_for_dump = None):
+            path_for_dump = None,
+            proc_of_train_to_validate = 0.1):
         '''
             train the network and adjust the weights during nb_epoches iterations
-            X_train:            data samples to train on
-            y_train:            labels to train on
-            K:                  number of classes
-            minibatch_size:     size of minibatch used in training
-            nb_epoches:         number of epoches of training
-            X_cv:               data samples for validation
-            y_cv:               labels for validation
-            step_size:          graident descent step size
-            epsilon:            convergence criterion, also used in rmsprop and adam to avoid zero division
-            gamma:              rmsprop parameter of sliding window of squared gradient
-            beta1:              adam parameter of sliding window of gradient
-            beta2:              adam parameter of sliding window of squared gradient
-            optimizer:          type of optimizer, currently supported 'sgd', 'rmsprop', 'adam'
-            print_every_proc:   printing options, the training progress will be printed every x procents
-            path_for_dump:      if the path set, a dump of the network will be made every epoche
+            X_train:                        data samples to train on
+            y_train:                        labels to train on
+            K:                              number of classes
+            minibatch_size:                 size of minibatch used in training
+            nb_epoches:                     number of epoches of training
+            X_cv:                           data samples for validation
+            y_cv:                           labels for validation
+            step_size:                      graident descent step size
+            epsilon:                        convergence criterion, also used in rmsprop and adam to avoid zero division
+            gamma:                          rmsprop parameter of sliding window of squared gradient
+            beta1:                          adam parameter of sliding window of gradient
+            beta2:                          adam parameter of sliding window of squared gradient
+            optimizer:                      type of optimizer, currently supported 'sgd', 'rmsprop', 'adam'
+            path_for_dump:                  if the path set, a dump of the network will be made every epoche
+            frac_of_train_to_validate:      fraction of X_train to be used during the accuracy estimation
         '''
 
         # do the label preprocessing first
@@ -212,15 +218,19 @@ class ConvNet:
             m_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
 
         loss = math.inf
-        # do fixed number of iterations
+        # do fixed number of epoches
         for iter in range(nb_epoches):
-            print("Iteration %d" % iter)
+            print("Epoch %d" % iter)
             X_train, y_train_vector = shuffle(X_train, y_train_vector)
             prev_loss = loss
             loss = 0
             proc_done = 0
+            time = timer()
+
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
+                print_progress_bar(i, X_train.shape[0], prefix = 'Epoch progress:', suffix = 'Complete', length = 50)
+
                 X_minibatch = X_train[i:i + minibatch_size]
                 y_minibatch = y_train_vector[i:i + minibatch_size]
 
@@ -260,10 +270,6 @@ class ConvNet:
                     else:
                         raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
-                if 100 * i // X_train.shape[0] > proc_done + print_every_proc:
-                    proc_done = 100 * i // X_train.shape[0]
-                    print("%d%% done" % (proc_done))
-
             print("Loss = %f" % (loss / X_train.shape[0]))
 
             if path_for_dump != None:
@@ -271,12 +277,17 @@ class ConvNet:
 
 
             if X_cv is not None and y_cv is not None:
-                y_cv_vector = np.zeros((y_cv.shape[0], K))
-                for i in range(y_cv.shape[0]):
-                    y_cv_vector[i, y_cv[i]] = 1
                 y_cv_pred = self.predict(X_cv)
                 accs = (y_cv_pred == y_cv).sum() / y_cv.size
                 print("Accuracy on validation = %f" % accs)
+
+            if proc_of_train_to_validate > 0:
+                sampled_indexes_train = np.random.choice(X_train.shape[0], int(proc_of_train_to_validate * X_train.shape[0]))
+                y_train_pred = self.predict(X_train[sampled_indexes_train])
+                accs = (y_train_pred == y_train[sampled_indexes_train]).sum() / y_train[sampled_indexes_train].size
+                print("Accuracy on train = %f" % accs)
+
+            print('epoch is computed in {}m {:6f}s'.format((timer() - time) // 60), (timer() - time) % 60)
 
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
                 print("Termination criteria is true, I stop the learning...")

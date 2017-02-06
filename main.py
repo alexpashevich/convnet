@@ -7,6 +7,7 @@ Usage:
     main.py test conv [--valsize <float>] [--seed <int>] [options]
     main.py test kaggle_cnn
     main.py test tensorflow (full|slim)
+    main.py continue kaggle_cnn [--dump_path <string>] [options]
     main.py run prediction [--dump_path <string>] [options]
 
 Options:
@@ -82,6 +83,10 @@ def main(args):
         if args['prediction']:
             if '--dump_path' in args and args['--dump_path'] is not None:
                 predict_with_dump(args['--dump_path'])
+    elif args['continue']:
+        if args['kaggle_cnn']:
+            if '--dump_path' in args and args['--dump_path'] is not None:
+                test_kaggle_cnn(args['--dump_path'])
 
 if __name__ == "__main__":
     args = docopt(__doc__)
