@@ -112,11 +112,6 @@ class ConvLayer(object):
         2. Multiply transposed prev. weights (prev_out_batch) by error batch
         3. Multiply 1 by 2              
         """
-
-        # print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
-        # print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
-        
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
         elif self.activation_type != "None":
