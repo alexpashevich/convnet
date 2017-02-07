@@ -165,7 +165,7 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
     if val_ind_path is None:
-        X_train, X_val, y_train, y_val, val_indexes = train_test_split(X_train_full, y_train_full, test_size = 0.05)
+        X_train, X_val, y_train, y_val, val_indexes = train_test_split(X_train_full, y_train_full, test_size = 0.85)
     else:
         val_indexes = pickle.load(Path(val_ind_path).open('rb'))
         X_val, y_val = X_train_full[val_indexes], y_train_full[val_indexes]
@@ -177,7 +177,7 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
+    # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
 
     print("X_train.shape = ", X_train.shape)
     print("X_val.shape = ", X_val.shape)
@@ -196,6 +196,7 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
     fc_size_in2 = 1024
 
     cnn = ConvNet()
+
     if cnn_load_path is None:
         log.info('Building CNN architecture from scratch')
         cnn.set_img_shape(img_shape)
@@ -253,7 +254,6 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
 
     dump_validation_and_architecture(dump_folder/'validation_indexes.dat', val_indexes, dump_folder/'info.txt', cnn.get_description())
 
-
     cnn.fit(X_train,
             y_train,
             K = nb_classes,
@@ -267,12 +267,10 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
 
     y_test = cnn.predict(X_test)
     with (dump_folder/"Yte.csv").open('w') as csvfile:
-        # writer = csv.writer(file)
         writer = csv.DictWriter(csvfile, fieldnames=['Id', 'Prediction'])
         writer.writeheader()
         for id, y in zip(range(1, y_test.shape[0] + 1), y_test):
             writer.writerow({'Id': id, 'Prediction': y})
-        # writer.writerows(zip(range(1, y_test.shape[0] + 1), y_test))
     log.info("Prediction was done successfully!")
 
 

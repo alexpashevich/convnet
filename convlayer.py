@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 from utils import get_im2col_indices, ReLU
 
 class ConvLayer(object):
-    def __init__(self, layer_info): # W, b, stride=1, padding=0):
+    def __init__(self, layer_info): 
         # W - [out_channels, in_channels, height, width]
         self.in_channels = layer_info["in_channels"]
         self.out_channels = layer_info["out_channels"]
@@ -110,7 +110,7 @@ class ConvLayer(object):
         2. Multiply transposed prev. weights (prev_out_batch) by error batch
         3. Multiply 1 by 2              
         """
-        
+
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
         elif self.activation_type != "None":
@@ -120,9 +120,6 @@ class ConvLayer(object):
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
        
-        # import pudb; pudb.set_trace()  # XXX BREAKPOINT
-        
-        # Try with this function:
         k, i, j = self.get_im2col_ind(X)
         p = self.padding
         if p == 0:
@@ -131,14 +128,11 @@ class ConvLayer(object):
             Xp = np.pad(X, ((0, 0), (0,0), (p, p), (p, p)), mode='constant')
         X_col = Xp[:, k, i, j]  
  
-       # Do im2col trick once again
-        # k, i, j = get_im2col_indices(self.in_channels, self.height, self.width, out_height, out_width, self.stride)
-        # X_col = X[:, k, i, j]  # (batch_size)*(H*W*in_channels)x(oH*oW)
         X_col = X_col.transpose(1, 2, 0).reshape(self.height * self.width * in_channels, -1)
         # Here we just transposed X into columns, in the same way as in forward phase
         
         # here we sum up all errors, reshape them into matrix as well
-        db = np.sum(error_batch, axis=(0, 2, 3)) # ?? Do we sum it as it should be
+        db = np.sum(error_batch, axis=(0, 2, 3)) # 
         # db = db.reshape(self.out_channels, -1) # problems with dimensions in big network
         
         # Here - we reshape batch of errors in order to multiply it by weights
@@ -150,13 +144,10 @@ class ConvLayer(object):
         
         # Reshape dX back
         dX_reshaped = dX_col.reshape(self.in_channels * self.height * self.width, -1, batch_size).transpose(2, 0, 1)
-        # try also this one: dX_reshape = transpose(1, 2, 0).reshape(....)
         h_pad, w_pad = in_height + 2*self.padding, in_width + 2*self.padding
+
         x_pad = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
         np.add.at(x_pad, (slice(None), k, i, j), dX_reshaped) # SLOW THING
-        # x_pad_alt = np.zeros((batch_size, self.in_channels, h_pad, w_pad), dtype = dX_col.dtype)
-        # x_pad_alt[:, k, i, j] = dX_reshaped
-        # x_pad = x_pad_alt
         # remove padding (if any)
         if self.padding == 0:
             dX = x_pad

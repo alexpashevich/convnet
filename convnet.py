@@ -175,7 +175,6 @@ class ConvNet:
             gamma = 0.9,
             beta1 = 0.9,
             beta2 = 0.999,
-            print_every_proc = 1,
             path_for_dump = None,
             proc_of_train_to_validate = 0.1):
         '''
@@ -216,7 +215,7 @@ class ConvNet:
         loss = math.inf
         # do fixed number of epochs
         for iter in range(nb_epochs):
-            print("Epoch %d" % iter)
+            log.info("Epoch {}".format(iter))
             X_train, y_train_vector = shuffle(X_train, y_train_vector)
             prev_loss = loss
             loss = 0
@@ -266,7 +265,7 @@ class ConvNet:
                     else:
                         raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
-            print("Loss = %f" % (loss / X_train.shape[0]))
+            log.info("Loss = {}".format(loss / X_train.shape[0]))
 
             if path_for_dump != None:
                 self.dump_nn(path_for_dump/"{}.dump".format(iter))
@@ -275,19 +274,19 @@ class ConvNet:
             if X_cv is not None and y_cv is not None:
                 y_cv_pred = self.predict(X_cv)
                 accs = (y_cv_pred == y_cv).sum() / y_cv.size
-                print("Accuracy on validation = %f" % accs)
+                log.info("Accuracy on validation = {}".format(accs))
 
             if proc_of_train_to_validate > 0:
                 sampled_indexes_train = np.random.choice(X_train.shape[0], int(proc_of_train_to_validate * X_train.shape[0]), replace=False)
                 y_train_pred = self.predict(X_train[sampled_indexes_train])
                 accs = (y_train_pred == y_train[sampled_indexes_train]).sum() / y_train[sampled_indexes_train].size
-                print("Accuracy on train = %f" % accs)
+                log.info("Accuracy on train = {}".format(accs))
 
             epoch_time = timer() - time
             log.info('epoch is computed in {}m {}s'.format(epoch_time // 60, int((timer() - time) % 60)))
 
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
-                print("Termination criteria is true, I stop the learning...")
+                log.info("Termination criteria is true, I stop the learning...")
                 break
 
     def predict(self, X_test):
