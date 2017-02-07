@@ -30,6 +30,16 @@ def labels2vectors(y_labels, nb_casses):
     return y_vector
 
 
+def train_test_split(X, y, test_size):
+    indexes_test = np.random.choice(X.shape[0], int(test_size * X.shape[0]), replace=False)
+    indexes_train = list(set(range(X.shape[0])) - set(indexes_test))
+    X_train = X[indexes_train]
+    y_train = y[indexes_train]
+    X_test = X[indexes_test]
+    y_test = y[indexes_test]
+    return X_train, X_test, y_train, y_test, indexes_test
+
+
 def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
     """
     Call in a loop to create terminal progress bar
@@ -49,6 +59,11 @@ def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1,
     # Print New Line on Complete
     if iteration == total: 
         print()
+
+
+def dump_validation_and_architecture(val_indexes_file, val_indexes, description_file, description):
+    pickle.dump(val_indexes, val_indexes_file.open('wb'))
+    description_file.open('w').write(description)
 
 
 def get_data_fast(name):

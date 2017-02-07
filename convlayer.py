@@ -57,7 +57,6 @@ class ConvLayer(object):
         """
         X - [batch_size, in_channels, in_height, in_width]
         """
-        # print("[ConvLayer] X.shape = ", X.shape)
 
         batch_size, in_channels, in_height, in_width = X.shape
         out_height, out_width = self.get_output_dims(X)
@@ -77,7 +76,6 @@ class ConvLayer(object):
         else:
             print("error: unknown activation type")
             output = output
-        # print("[ConvLayer] output.shape = ", output.shape)
         return output
 
 
@@ -112,10 +110,6 @@ class ConvLayer(object):
         2. Multiply transposed prev. weights (prev_out_batch) by error batch
         3. Multiply 1 by 2              
         """
-
-        # print("[ConvLayer_back] error_batch.shape = ", error_batch.shape)
-        # print("[ConvLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("[ConvLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
         
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0 # Step 1
@@ -178,12 +172,7 @@ class ConvLayer(object):
         return self.b.shape
 
     def update(self, update_W, update_b):
-        # print("self.W.shape =", self.W.shape)
-        # print("update_W.shape =", update_W.shape)
         self.W -= update_W
-        
-        # print("self.b.shape =", self.b.shape)
-        # print("update_b.shape =", update_b.shape)
         self.b -= update_b
 
     def dump_layer_info(self):
@@ -199,16 +188,8 @@ class ConvLayer(object):
         layer_info = ["convlayer", dict_layer]
         return layer_info
 
-    # def load_layer_info(self, dict_layer):
-    #     self.in_channels = dict_layer["self.in_channels"]
-    #     self.out_channels = dict_layer["self.out_channels"]
-    #     self.height = dict_layer["self.height"]
-    #     self.width = dict_layer["self.width"]
-    #     self.stride = dict_layer["self.stride"]
-    #     self.padding = dict_layer["self.padding"]
-    #     self.activation_type = dict_layer["self.activation_type"]
-    #     self.W = dict_layer["self.W"]
-    #     self.b = dict_layer["self.b"]
+    def get_layer_description(self):
+        return 'CL [{}, {}]x{} (s{}, p{}, {})'.format(self.height, self.width, self.out_channels, self.stride, self.padding, self.activation_type)
 
 
 

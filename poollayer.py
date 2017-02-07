@@ -195,12 +195,8 @@ class PoolLayer(object):
                                    "type": self.type}]
         return layer_info
 
-    # def load_layer_info(self, dict_layer):
-    #     self.stride = dict_layer["self.stride"]
-    #     self.size = dict_layer["self.size"]
-    #     self.type = dict_layer["self.type"]
-    #     self.last_max_ids = None
-    #     self.last_X_col = None
+    def get_layer_description(self):
+        return 'maxPL [{}, {}] (s{})'.format(self.size, self.size, self.stride)
 
 
 

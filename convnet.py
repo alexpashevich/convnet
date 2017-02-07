@@ -1,10 +1,6 @@
 import numpy as np
 import math, logging, pickle
-# sys.path.append('/media/d/study/Grenoble/courses/advanced_learning_models/Competition/temp/hipsternet')
-import hipsternet.layer as hl
 from sklearn.utils import shuffle
-from sklearn.datasets import make_moons
-from sklearn.model_selection import train_test_split
 # import tensorflow as tf
 # import matplotlib.pyplot as plt
 
@@ -170,7 +166,7 @@ class ConvNet:
             y_train,
             K,
             minibatch_size,
-            nb_epoches,
+            nb_epochs,
             X_cv = None,
             y_cv = None,
             optimizer = 'rmsprop',
@@ -183,20 +179,20 @@ class ConvNet:
             path_for_dump = None,
             proc_of_train_to_validate = 0.1):
         '''
-            train the network and adjust the weights during nb_epoches iterations
+            train the network and adjust the weights during nb_epochs iterations
             X_train:                        data samples to train on
             y_train:                        labels to train on
             K:                              number of classes
             minibatch_size:                 size of minibatch used in training
-            nb_epoches:                     number of epoches of training
+            nb_epochs:                     number of epochs of training
             X_cv:                           data samples for validation
             y_cv:                           labels for validation
+            optimizer:                      type of optimizer, currently supported 'sgd', 'rmsprop', 'adam'
             step_size:                      graident descent step size
             epsilon:                        convergence criterion, also used in rmsprop and adam to avoid zero division
             gamma:                          rmsprop parameter of sliding window of squared gradient
             beta1:                          adam parameter of sliding window of gradient
             beta2:                          adam parameter of sliding window of squared gradient
-            optimizer:                      type of optimizer, currently supported 'sgd', 'rmsprop', 'adam'
             path_for_dump:                  if the path set, a dump of the network will be made every epoche
             frac_of_train_to_validate:      fraction of X_train to be used during the accuracy estimation
         '''
@@ -218,8 +214,8 @@ class ConvNet:
             m_b = [np.zeros(layer.get_b_shape()) for layer in self.layers] # sum of window of square gradients w.r.t. b
 
         loss = math.inf
-        # do fixed number of epoches
-        for iter in range(nb_epoches):
+        # do fixed number of epochs
+        for iter in range(nb_epochs):
             print("Epoch %d" % iter)
             X_train, y_train_vector = shuffle(X_train, y_train_vector)
             prev_loss = loss
@@ -229,7 +225,7 @@ class ConvNet:
 
             # do in minibatch fashion
             for i in range(0, X_train.shape[0], minibatch_size):
-                print_progress_bar(i, X_train.shape[0], prefix = 'Epoch progress:', suffix = 'Complete', length = 50)
+                print_progress_bar(min(i + minibatch_size, X_train.shape[0]), X_train.shape[0], 'Epoch progress:', 'Complete', length = 50)
 
                 X_minibatch = X_train[i:i + minibatch_size]
                 y_minibatch = y_train_vector[i:i + minibatch_size]
@@ -282,12 +278,13 @@ class ConvNet:
                 print("Accuracy on validation = %f" % accs)
 
             if proc_of_train_to_validate > 0:
-                sampled_indexes_train = np.random.choice(X_train.shape[0], int(proc_of_train_to_validate * X_train.shape[0]))
+                sampled_indexes_train = np.random.choice(X_train.shape[0], int(proc_of_train_to_validate * X_train.shape[0]), replace=False)
                 y_train_pred = self.predict(X_train[sampled_indexes_train])
                 accs = (y_train_pred == y_train[sampled_indexes_train]).sum() / y_train[sampled_indexes_train].size
                 print("Accuracy on train = %f" % accs)
 
-            print('epoch is computed in {}m {:6f}s'.format((timer() - time) // 60), (timer() - time) % 60)
+            epoch_time = timer() - time
+            log.info('epoch is computed in {}m {}s'.format(epoch_time // 60, int((timer() - time) % 60)))
 
             if np.absolute(loss - prev_loss) < np.sqrt(epsilon):
                 print("Termination criteria is true, I stop the learning...")
@@ -330,6 +327,11 @@ class ConvNet:
             else:
                 raise ValueError("error: can not load nn, unknown layer type {}".format(layer_type))
 
+    def get_description(self):
+        description = ''
+        for layer in self.layers:
+            description = description + layer.get_layer_description() + '\n'
+        return description
 
 
 

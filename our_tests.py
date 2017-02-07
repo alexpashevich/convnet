@@ -1,7 +1,7 @@
 # import tensorflow as tf
 # import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 from sklearn.datasets import make_moons
 import hipsternet.input_data as input_data
 from pathlib import Path
@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, train_test_split, dump_validation_and_architecture
 import pickle, csv, logging
 
 HIPSTERNET = Path('external/hipsternet')
@@ -21,7 +21,7 @@ def test_conv_layer(valsize, seed):
     X_train_full = get_data_fast("Xtr")[:,:-1]
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1]
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = valsize)
+    X_train, X_val, y_train, y_val, _ = train_test_split(X_train_full, y_train_full, test_size = valsize)
                     
     ch1 = 12
     cnn = ConvNet()
@@ -99,10 +99,8 @@ def test_conv_layer(valsize, seed):
 
 def test_moons():
     X, Y = make_moons(n_samples=7000, random_state=42, noise=0.1)
-    X_train_val, X_test, Y_train_val, Y_test = train_test_split(X, Y, random_state=42, test_size = 0.2)
-    X_train, X_val, Y_train, Y_val = train_test_split(X_train_val, Y_train_val, random_state=42, test_size = 0.1)
-
-    # run_nn(X_train, X_test, Y_train, Y_test)
+    X_train_val, X_test, Y_train_val, Y_test, _ = train_test_split(X, Y, random_state=42, test_size = 0.2)
+    X_train, X_val, Y_train, Y_val, _ = train_test_split(X_train_val, Y_train_val, random_state=42, test_size = 0.1)
 
     np.random.seed(228)
     size1 = 2
@@ -114,10 +112,7 @@ def test_moons():
     cnn.add_layer("fclayer", layer_info = {"input_size": size1, "output_size": size2, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size2, "output_size": size3, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "None"})
-    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, nb_epoches = 100, step_size=0.1, optimizer='rmsprop')
-
-    # print(Y_train)
-    # print(Y_test)
+    cnn.fit(X, Y, X_cv = X_val, y_cv = Y_val, K = 2, minibatch_size = 50, nb_epochs = 100, step_size=0.1, optimizer='rmsprop')
 
     y_pred = cnn.predict(X_test)
     accs = (y_pred == Y_test).sum() / Y_test.size
@@ -129,7 +124,7 @@ def test_kaggle_fcnn():
     y_train_full = pd.read_csv('../data/Ytr.csv').as_matrix()[:,1]
     X_test = pd.read_csv('../data/Xte.csv', header = None).as_matrix()[:,:-1]
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.1)
+    X_train, X_val, y_train, y_val, _ = train_test_split(X_train_full, y_train_full, test_size = 0.1)
 
     # vis_img(X_test[40,:])
 
@@ -154,11 +149,8 @@ def test_kaggle_fcnn():
     cnn.add_layer("fclayer", layer_info = {"input_size": size3, "output_size": size4, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size4, "output_size": size5, "activation_type": "ReLU"})
     cnn.add_layer("fclayer", layer_info = {"input_size": size5, "output_size": size6, "activation_type": "None"})
-    # cnn.add_layer("fclayer", layer_info = {"input_size": size6, "output_size": size7, "activation_type": "None"})
 
-    #cnn.fit(X_train, y_train, K = nb_classes, X_val = X_val, y_val = y_val, minibatch_size = 50, nb_epoches = 30)
-    #y_test = cnn.predict(X_test)
-    #y_test.dump("Yte.dat")
+    #cnn.fit(X_train, y_train, K = nb_classes, X_val = X_val, y_val = y_val, minibatch_size = 50, nb_epochs = 30)
 
 def test_poollayer():
     X_test = pd.read_csv('Data/Xte.csv', header = None).as_matrix()[:,:-1]
@@ -167,19 +159,25 @@ def test_poollayer():
 
     cnn.layers[0].assert_pool_layer()
 
-def test_kaggle_cnn(cnn_load_path = None):
+def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
     X_train_full = get_data_fast("Xtr")[:,:-1]
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.05)
+    if val_ind_path is None:
+        X_train, X_val, y_train, y_val, val_indexes = train_test_split(X_train_full, y_train_full, test_size = 0.05)
+    else:
+        val_indexes = pickle.load(Path(val_ind_path).open('rb'))
+        X_val, y_val = X_train_full[val_indexes], y_train_full[val_indexes]
+        X_train = X_train_full[list(set(range(X_train_full.shape[0])) - set(val_indexes))]
+        y_train = y_train_full[list(set(range(X_train_full.shape[0])) - set(val_indexes))]
 
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
+    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
 
     print("X_train.shape = ", X_train.shape)
     print("X_val.shape = ", X_val.shape)
@@ -188,17 +186,18 @@ def test_kaggle_cnn(cnn_load_path = None):
     dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dump_folder.mkdir()
 
-
-    ch1 = 64
+    ch1 = 32
     ch2 = 64
-    ch3 = 256
+    ch3 = 128
+    ch4 = 128
     nb_classes = 10
 
-    fc_size_in1 = 8*8*ch2
+    fc_size_in1 = 8*8*ch4
     fc_size_in2 = 1024
 
     cnn = ConvNet()
     if cnn_load_path is None:
+        log.info('Building CNN architecture from scratch')
         cnn.set_img_shape(img_shape)
         cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
                                                  "out_channels": ch1,
@@ -207,15 +206,29 @@ def test_kaggle_cnn(cnn_load_path = None):
                                                  "stride": 1,
                                                  "padding": 2,
                                                  "activation_type": "ReLU"}) # 32 x 32 x ch1
-        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
                                                  "out_channels": ch2,
                                                  "height": 5,
                                                  "width": 5,
                                                  "stride": 1,
                                                  "padding": 2,
-                                                "activation_type": "ReLU"}) # 16 x 16 x ch2
-        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
+                                                 "activation_type": "ReLU"}) # 32 x 32 x ch2
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch2
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+                                                 "out_channels": ch3,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                "activation_type": "ReLU"}) # 16 x 16 x ch3
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                                 "out_channels": ch4,
+                                                 "height": 3,
+                                                 "width": 3,
+                                                 "stride": 1,
+                                                 "padding": 1,
+                                                "activation_type": "ReLU"}) # 16 x 16 x ch4
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch4
 
         cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in1, "output_size": fc_size_in2, "activation_type": "ReLU"})
         cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in2, "output_size": nb_classes, "activation_type": "None"})
@@ -235,7 +248,10 @@ def test_kaggle_cnn(cnn_load_path = None):
         #                                          "padding": 0,
         #                                          "activation_type": "None"}) # 1 x 1 x 10
     else:
+        log.info('Loading CNN architecture from {}'.format(cnn_load_path))
         cnn.load_nn(Path(cnn_load_path))
+
+    dump_validation_and_architecture(dump_folder/'validation_indexes.dat', val_indexes, dump_folder/'info.txt', cnn.get_description())
 
 
     cnn.fit(X_train,
@@ -244,8 +260,8 @@ def test_kaggle_cnn(cnn_load_path = None):
             X_cv = X_val,
             y_cv = y_val,
             minibatch_size = 50,
-            nb_epoches = 20,
-            step_size = 0.0001,
+            nb_epochs = 20,
+            step_size = 0.01,
             optimizer='adam',
             path_for_dump = dump_folder)
 
@@ -261,22 +277,10 @@ def test_kaggle_cnn(cnn_load_path = None):
 
 
 def test_mnist():
-    # get kaggle data
-    # X_train_full = get_data_fast("Xtr")[:,:-1]
-    # X_test = get_data_fast("Xte")[:,:-1]
-    # y_train_full = get_data_fast("Ytr")[:,1].astype(int)
-
-    # get CIFAR_orig data
-    # data = unpickle("../cifar_orig/data_batch_5")
-    # X_train_full = data[b'data']
-    # y_train_full = np.array(data[b'labels'])
-
-    # X_train, X_cv, y_train, y_cv = train_test_split(X_train_full, y_train_full, test_size = 0.1)
-
     # get MNIST data
     mnist = input_data.read_data_sets('Data/MNIST_data/', one_hot=False)
     X_train, y_train = mnist.train.images, mnist.train.labels
-    sampled_indexes_train = np.random.choice(X_train.shape[0], 5000)
+    sampled_indexes_train = np.random.choice(X_train.shape[0], 5000, replace=False)
     X_train = X_train[sampled_indexes_train,:]
     y_train = y_train[sampled_indexes_train]
 
@@ -297,11 +301,8 @@ def test_mnist():
     X_test = X_test.reshape(-1, *img_shape)
 
     print("X_train.shape = ", X_train.shape)
-    print("y_train.shape = ", y_train.shape)
     print("X_val.shape = ", X_val.shape)
-    print("y_val.shape = ", y_val.shape)
     print("X_test.shape = ", X_test.shape)
-
 
     ch1 = 32
     ch2 = 64
@@ -340,7 +341,7 @@ def test_mnist():
                                              "stride": 1,
                                              "padding": 0,
                                              "activation_type": "None"}) # 1 x 1 x 10
-    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, nb_epoches = 30, step_size=0.01, optimizer='sgd')
+    cnn.fit(X_train, y_train, K = nb_classes, X_cv = X_val, y_cv = y_val, minibatch_size = 50, nb_epochs = 30, step_size=0.01, optimizer='sgd')
 
 
 def predict_with_dump(dump_path):
@@ -348,7 +349,7 @@ def predict_with_dump(dump_path):
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_full, y_train_full, test_size = 0.01)
+    X_train, X_val, y_train, y_val, _ = train_test_split(X_train_full, y_train_full, test_size = 0.01)
     img_shape = (3, 32, 32)
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
@@ -358,12 +359,10 @@ def predict_with_dump(dump_path):
     dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dump_folder.mkdir()
     with (dump_folder/"Yte.csv").open('w') as csvfile:
-        # writer = csv.writer(file)
         writer = csv.DictWriter(csvfile, fieldnames=['Id', 'Prediction'])
         writer.writeheader()
         for id, y in zip(range(1, y_test.shape[0] + 1), y_test):
             writer.writerow({'Id': id, 'Prediction': y})
-        # writer.writerows(zip(range(1, y_test.shape[0] + 1), y_test))
     log.info("Prediction was done successfully!")
 
 

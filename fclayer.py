@@ -26,7 +26,6 @@ class FCLayer(object):
 
     def forwardprop(self, X):
         ''' X - [batch_size, input_size] '''
-        # print("[FCLayer] X.shape = ", X.shape)
 
         out = X @ self.W + np.outer(np.ones(X.shape[0]), self.b)
 
@@ -37,14 +36,9 @@ class FCLayer(object):
         else:
             print("error: unknown activation type")
             out = out
-        # print("[FCLayer] output.shape = ", out.shape)
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):
-        # print("[FCLayer_back] error_batch.shape = ", error_batch.shape)
-        # print("[FCLayer_back] cur_out_batch.shape = ", cur_out_batch.shape)
-        # print("[FCLayer_back] prev_out_batch.shape = ", prev_out_batch.shape)
-
         if self.activation_type == "ReLU":
             error_batch[cur_out_batch <= 0] = 0
 
@@ -67,12 +61,8 @@ class FCLayer(object):
         layer_info = ["fclayer", dict_layer]
         return layer_info
 
-    # def load_layer_info(self, dict_layer):
-    #     self.input_size = dict_layer["self.input_size"]
-    #     self.output_size = dict_layer["self.output_size"]
-    #     self.activation_type = dict_layer["self.activation_type"]
-    #     self.W = dict_layer["self.W"]
-    #     self.b = dict_layer["self.b"]
+    def get_layer_description(self):
+        return 'FCL {} ({})'.format(self.output_size, self.activation_type)
 
 
 
