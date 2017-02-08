@@ -1,7 +1,6 @@
 import numpy as np
 from pathlib import Path
 import pickle, logging
-from scipy.ndimage.interpolation import rotate
 log = logging.getLogger(__name__)
 
 
@@ -38,6 +37,28 @@ def train_test_split(X, y, test_size):
     X_test = X[indexes_test]
     y_test = y[indexes_test]
     return X_train, X_test, y_train, y_test, indexes_test
+
+
+def shuffle(*ndarray_list):
+    assert len(ndarray_list) > 0
+    if type(ndarray_list[0]) == np.ndarray:
+        size = ndarray_list[0].shape[0]
+    else:
+        size = len(ndarray_list[0])
+    for ndarray in ndarray_list:
+        if type(ndarray) == np.ndarray:
+            cur_size = ndarray.shape[0]
+        else:
+            cur_size = len(ndarray)
+        if cur_size != size:
+            raise ValueError("error: inconsisten shapes in shuffle")
+
+    shuffled_indexes = np.random.permutation([i for i in range(size)])
+    shuffled_ndarray_list = []
+    for ndarray in ndarray_list:
+        shuffled_ndarray_list.append(ndarray[shuffled_indexes])
+
+    return tuple(shuffled_ndarray_list)
 
 
 def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -108,6 +129,7 @@ def prepro_cifar(X_train, X_val, X_test, img_shape):
 
 
 def data_augmentation(X, y, rotation_angle):
+    from scipy.ndimage.interpolation import rotate
     X_flipped = np.flip(X, 3)
     X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
     X_rotated_left = rotate(X, -rotation_angle, (2,3), reshape=False)

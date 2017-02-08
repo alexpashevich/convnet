@@ -2,7 +2,7 @@ from utils import get_data_fast
 # import tensorflow as tf
 # import tensorflow.contrib.slim as slim
 import numpy as np
-from sklearn.model_selection import train_test_split
+from utils import train_test_split
 
 def test_tensorflow_full():
 
