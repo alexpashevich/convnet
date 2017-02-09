@@ -1,4 +1,4 @@
-# import tensorflow as tf
+
 # import matplotlib.pyplot as plt
 import numpy as np
 # from sklearn.model_selection import train_test_split
@@ -177,7 +177,7 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
+    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=10)
 
     print("X_train.shape = ", X_train.shape)
     print("X_val.shape = ", X_val.shape)
@@ -186,8 +186,8 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
     dump_folder = DUMPFOLDER/datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     dump_folder.mkdir()
 
-    ch1 = 32
-    ch2 = 64
+    ch1 = 24
+    ch2 = 48
     ch3 = 1024
     ch4 = 128
     nb_classes = 10
@@ -261,7 +261,7 @@ def test_kaggle_cnn(cnn_load_path = None, val_ind_path = None):
             y_cv = y_val,
             minibatch_size = 50,
             nb_epochs = 20,
-            step_size = 0.01,
+            step_size = 0.001,
             optimizer='rmsprop',
             path_for_dump = dump_folder)
 
