@@ -156,23 +156,37 @@ def data_augmentation(X, y, rotation_angle, prob=0.5):
 
 
 
-def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, prob = 0.5):
+def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, distortions = True, prob = 0.5):
     from scipy.ndimage.interpolation import rotate
     y_aug = y
+    X_aug = X
 
     if flip==True:
         X_flip_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
         X_flipped = np.flip(X[X_flip_ind], 3)
         y_aug = np.concatenate((y_aug,y[X_flip_ind]))
-        X_aug = np.concatenate((X, X_flipped))
+        X_aug = np.concatenate((X_aug, X_flipped))
 
     if rotate==True:
         X_rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
-        X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
+        X_rotated_right = rotate(X[rotated_right_indexes], rotation_angle, (2,3), reshape=False)
         X_rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
-        X_rotated_left = rotate(X, -rotation_angle, (2,3), reshape=False)
-        X_aug = np.concatenate((X, X_rotated_right, X_rotated_left))
+        X_rotated_left = rotate(X[rotated_left_indexes], -rotation_angle, (2,3), reshape=False)
+        X_aug = np.concatenate((X_aug, X_rotated_right, X_rotated_left))
         y_aug = np.concatenate((y_aug,y[X_rotated_right_indexes],y[X_rotated_left_indexes]))
+
+    if distortions==True:
+        X_dist_bright_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        X_dist_bright = X + 0.15
+        X_dist_contrast_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        for i in range(0, 3072, 1024):
+            mean = np.mean(X[X_dist_contrast_ind,i:i+1024])
+            X_dust_contrast = (X[X_dist_contrast_ind,i:i+1024] - mean)*1.3
+            X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        # for now: without fancy experiments, just changed a color a bit in one channel
+        X_dist_hue = X[X_dist_hue_ind,1024:2048] + 0.15
+        X_aug = np.concatenate((X_aug, X_dist_bright, X_dist_contrast, X_dist_hue))
+        y_aug = np.concatenate((y_aug, y[X_dist_bright_ind], y[X_dist_contrast_ind], y[X_dist_hue_ind]))
     
     return X_aug, y_aug
 
