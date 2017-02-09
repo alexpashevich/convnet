@@ -177,7 +177,8 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
 
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
-    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=7) # does not yield any significant (or even noticable) imporvments, maybe give it another try
+    # does not yield any significant (or even noticable) imporvments, maybe give it another try
+    X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=7)
 
     log.info("X_train.shape = {}, X_val.shape = {}, X_test.shape = {}".format(X_train.shape, X_val.shape, X_test.shape))
 
