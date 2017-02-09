@@ -125,6 +125,7 @@ def prepro_mnist(X_train, X_val, X_test):
 
 
 def prepro_cifar(X_train, X_val, X_test, img_shape):
+    log.info('data preprocessing...')
     for i in range(0, 3072, 1024):
         mean = np.mean(X_train[:,i:i+1024])
         std = np.std(X_train[:,i:i+1024])

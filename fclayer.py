@@ -11,7 +11,7 @@ class FCLayer(object):
         if "W" in layer_info:
             self.W = layer_info["W"]
         else:
-            self.W = np.random.randn(self.input_size, self.output_size) * 0.01 # as in the AlexNet paper
+            self.W = np.random.randn(self.input_size, self.output_size) * 0.01
         if "b" in layer_info:
             self.b = layer_info["b"]
         else:
