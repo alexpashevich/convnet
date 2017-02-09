@@ -178,14 +178,18 @@ def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, dist
 
     if distortions==True:
         X_dist_bright_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        X_dist_bright = X + 0.15
+        X_dist_bright = X[X_dist_bright_ind] + 0.15
         X_dist_contrast_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        for i in range(0, 3072, 1024):
-            mean = np.mean(X[X_dist_contrast_ind,i:i+1024])
-            X_dust_contrast = (X[X_dist_contrast_ind,i:i+1024] - mean)*1.3
-            X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        X_dist_contrast = X[X_dist_contrast_ind]
+
+        for i in range(0, X_dist_contrast.shape[1]):
+            mean = np.mean(X_dist_contrast[:,i,:])
+            X_dist_contrast[:,i:i+1024] = (X_dist_contrast[:,i:i+1024] - mean)*1.3
+
+        X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        X_dist_hue = X[X_dist_hue_ind]
         # for now: without fancy experiments, just changed a color a bit in one channel
-        X_dist_hue = X[X_dist_hue_ind,1024:2048] + 0.15
+        X_dist_hue[:,1024:2048] = X_dist_hue[:,1024:2048] + 0.15
         X_aug = np.concatenate((X_aug, X_dist_bright, X_dist_contrast, X_dist_hue))
         y_aug = np.concatenate((y_aug, y[X_dist_bright_ind], y[X_dist_contrast_ind], y[X_dist_hue_ind]))
     

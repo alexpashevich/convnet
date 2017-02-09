@@ -8,7 +8,8 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, train_test_split, dump_validation_and_architecture, vis_img
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation
+from utils import train_test_split, dump_validation_and_architecture, vis_img, data_augmentation_new
 import pickle, csv, logging
 
 HIPSTERNET = Path('external/hipsternet')
@@ -178,6 +179,7 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
 
     # does not yield any significant (or even noticable) imporvments, maybe give it another try
     # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=7)
+    X_train, y_train = data_augmentation_new(X_train, y_train, rotation_angle=7)
 
     log.info("X_train.shape = {}, X_val.shape = {}, X_test.shape = {}".format(X_train.shape, X_val.shape, X_test.shape))
 
@@ -198,13 +200,13 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     if cnn_load_path is None:
         log.info('Building CNN architecture from scratch')
         cnn.set_img_shape(img_shape)
-        # cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
-        #                                          "out_channels": ch1,
-        #                                          "height": 5,
-        #                                          "width": 5,
-        #                                          "stride": 1,
-        #                                          "padding": 2,
-        #                                          "activation_type": "ReLU"}) # 32 x 32 x ch1
+        cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
+                                                 "out_channels": ch1,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                 "activation_type": "ReLU"}) # 32 x 32 x ch1
         # cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
         #                                          "out_channels": ch2,
         #                                          "height": 5,
@@ -212,14 +214,71 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         #                                          "stride": 1,
         #                                          "padding": 2,
         #                                          "activation_type": "ReLU"}) # 32 x 32 x ch2
-        # cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
+                                                 "out_channels": ch2,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                "activation_type": "ReLU"}) # 16 x 16 x ch2
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+        #                                          "out_channels": ch4,
+        #                                          "height": 3,
+        #                                          "width": 3,
+        #                                          "stride": 1,
+        #                                          "padding": 1,
+        #                                         "activation_type": "ReLU"}) # 16 x 16 x ch4
+        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
+
+
+
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+                                                 "out_channels": ch3,
+                                                 "height": 8,
+                                                 "width": 8,
+                                                 "stride": 1,
+                                                 "padding": 0,
+                                                 "activation_type": "ReLU"}) # 1 x 1 x ch3
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                                 "out_channels": nb_classes,
+                                                 "height": 1,
+                                                 "width": 1,
+                                                 "stride": 1,
+                                                 "padding": 0,
+                                                 "activation_type": "None"}) # 1 x 1 x 10
+
+        # A NEW ONE
+
+        # ch1 = 96
+        # ch2 = 96
+        # ch3 = 192
+        # ch4 = 192
+        # ch5 = 192
+        # ch6 = 1024
+
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
+        #                                          "out_channels": ch1,
+        #                                          "height": 3,
+        #                                          "width": 3,
+        #                                          "stride": 1,
+        #                                          "padding": 1,
+        #                                          "activation_type": "ReLU"}) # 32 x 32 x ch1
         # cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
         #                                          "out_channels": ch2,
-        #                                          "height": 5,
-        #                                          "width": 5,
+        #                                          "height": 3,
+        #                                          "width": 3,
         #                                          "stride": 1,
-        #                                          "padding": 2,
-        #                                         "activation_type": "ReLU"}) # 16 x 16 x ch2
+        #                                          "padding": 1,
+        #                                          "activation_type": "ReLU"}) # 32 x 32 x ch2
+        # cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch2
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
+        #                                          "out_channels": ch3,
+        #                                          "height": 3,
+        #                                          "width": 3,
+        #                                          "stride": 1,
+        #                                          "padding": 1,
+        #                                         "activation_type": "ReLU"}) # 16 x 16 x ch3
         # cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
         #                                          "out_channels": ch4,
         #                                          "height": 3,
@@ -228,84 +287,27 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         #                                          "padding": 1,
         #                                         "activation_type": "ReLU"}) # 16 x 16 x ch4
         # cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch4
-
-
-
-        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
-        #                                          "out_channels": ch3,
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch4,
+        #                                          "out_channels": ch5,
+        #                                          "height": 3,
+        #                                          "width": 3,
+        #                                          "stride": 1,
+        #                                          "padding": 1,
+        #                                          "activation_type": "ReLU"}) # 8 x 8 x ch5
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch5,
+        #                                          "out_channels": ch6,
         #                                          "height": 8,
         #                                          "width": 8,
         #                                          "stride": 1,
         #                                          "padding": 0,
-        #                                          "activation_type": "ReLU"}) # 1 x 1 x ch3
-        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+        #                                          "activation_type": "None"}) # 1 x 1 x 10
+        # cnn.add_layer("convlayer", layer_info = {"in_channels": ch6,
         #                                          "out_channels": nb_classes,
         #                                          "height": 1,
         #                                          "width": 1,
         #                                          "stride": 1,
         #                                          "padding": 0,
         #                                          "activation_type": "None"}) # 1 x 1 x 10
-
-        # A NEW ONE
-
-        ch1 = 96
-        ch2 = 96
-        ch3 = 192
-        ch4 = 192
-        ch5 = 192
-        ch6 = 1024
-
-        cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
-                                                 "out_channels": ch1,
-                                                 "height": 3,
-                                                 "width": 3,
-                                                 "stride": 1,
-                                                 "padding": 1,
-                                                 "activation_type": "ReLU"}) # 32 x 32 x ch1
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
-                                                 "out_channels": ch2,
-                                                 "height": 3,
-                                                 "width": 3,
-                                                 "stride": 1,
-                                                 "padding": 1,
-                                                 "activation_type": "ReLU"}) # 32 x 32 x ch2
-        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch2
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
-                                                 "out_channels": ch3,
-                                                 "height": 3,
-                                                 "width": 3,
-                                                 "stride": 1,
-                                                 "padding": 1,
-                                                "activation_type": "ReLU"}) # 16 x 16 x ch3
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
-                                                 "out_channels": ch4,
-                                                 "height": 3,
-                                                 "width": 3,
-                                                 "stride": 1,
-                                                 "padding": 1,
-                                                "activation_type": "ReLU"}) # 16 x 16 x ch4
-        cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch4
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch4,
-                                                 "out_channels": ch5,
-                                                 "height": 3,
-                                                 "width": 3,
-                                                 "stride": 1,
-                                                 "padding": 1,
-                                                 "activation_type": "ReLU"}) # 8 x 8 x ch5
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch5,
-                                                 "out_channels": ch6,
-                                                 "height": 8,
-                                                 "width": 8,
-                                                 "stride": 1,
-                                                 "padding": 0,
-                                                 "activation_type": "None"}) # 1 x 1 x 10
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch6,
-                                                 "out_channels": nb_classes,
-                                                 "height": 1,
-                                                 "width": 1,
-                                                 "stride": 1,
-                                                 "padding": 0,
-                                                 "activation_type": "None"}) # 1 x 1 x 10
 
         # cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in1, "output_size": fc_size_in2, "activation_type": "ReLU"})
         # cnn.add_layer("fclayer", layer_info = {"input_size": fc_size_in2, "output_size": nb_classes, "activation_type": "None"})
