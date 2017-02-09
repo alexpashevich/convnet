@@ -1,4 +1,4 @@
-# import tensorflow as tf
+
 # import matplotlib.pyplot as plt
 import numpy as np
 # from sklearn.model_selection import train_test_split
@@ -7,9 +7,8 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
-
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, train_test_split, dump_validation_and_architecture
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, train_test_split, dump_validation_and_architecture, vis_img
 import pickle, csv, logging
 
 HIPSTERNET = Path('external/hipsternet')
@@ -185,8 +184,8 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     dump_folder = DUMPFOLDER/datetime_string
     dump_folder.mkdir()
 
-    ch1 = 32
-    ch2 = 64
+    ch1 = 24
+    ch2 = 48
     ch3 = 1024
     ch4 = 128
     nb_classes = 10
