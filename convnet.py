@@ -1,10 +1,10 @@
 import numpy as np
 import math, logging, pickle
-from sklearn.utils import shuffle
+# from sklearn.utils import shuffle
 # import tensorflow as tf
 # import matplotlib.pyplot as plt
 
-from utils import vis_img, get_data_fast, get_im2col_indices, print_progress_bar
+from utils import vis_img, get_data_fast, get_im2col_indices, print_progress_bar, shuffle
 from timeit import default_timer as timer
 from fclayer import FCLayer
 from poollayer import PoolLayer
@@ -196,6 +196,13 @@ class ConvNet:
             frac_of_train_to_validate:      fraction of X_train to be used during the accuracy estimation
         '''
 
+        opt_params = None
+        if optimizer == 'rmsprop':
+            opt_params = gamma
+        elif optimizer == 'adam':
+            opt_params = (beta1, beta2)
+        log.info("Running for {} with step_size {}, minibatch_size = {}, epsilon = {}, opt_params = {}".format(optimizer, step_size, minibatch_size, epsilon, opt_params))
+
         # do the label preprocessing first
         y_train_vector = np.zeros((y_train.shape[0], K))
         for i in range(y_train.shape[0]):
@@ -216,7 +223,7 @@ class ConvNet:
         # do fixed number of epochs
         for iter in range(nb_epochs):
             log.info("Epoch {}".format(iter))
-            X_train, y_train_vector = shuffle(X_train, y_train_vector)
+            X_train, y_train_vector, y_train = shuffle(X_train, y_train_vector, y_train)
             prev_loss = loss
             loss = 0
             proc_done = 0
@@ -280,10 +287,9 @@ class ConvNet:
                 log.info("Accuracy on validation = {}".format(accs))
 
             if proc_of_train_to_validate > 0:
-                sampled_indexes_train = np.random.choice(X_train.shape[0], int(proc_of_train_to_validate * X_train.shape[0]), replace=False)
-                y_train_pred = self.predict(X_train[sampled_indexes_train])
-                accs = (y_train_pred == y_train[sampled_indexes_train]).sum() / y_train[sampled_indexes_train].size
-                log.info("Accuracy on train = {}".format(accs))
+                y_train_pred_full = self.predict(X_train)
+                accs_full = (y_train_pred_full == y_train).sum() / y_train.size
+                log.info("Accuracy on train = {}".format(accs_full))
 
             epoch_time = timer() - time
             log.info('epoch is computed in {}m {}s'.format(epoch_time // 60, int((timer() - time) % 60)))

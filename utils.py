@@ -1,7 +1,6 @@
 import numpy as np
 from pathlib import Path
 import pickle, logging
-from scipy.ndimage.interpolation import rotate
 log = logging.getLogger(__name__)
 
 
@@ -19,7 +18,6 @@ def vis_img(x):
     """ Take image of dims [channels, h, w], show"""
     import matplotlib.pyplot as plt
     img = x.reshape(3, 32, 32).transpose(1, 2, 0) + [0.25, 0.2, 0.2]
-    print(img - [0.25, 0.2, 0.2])
     plt.imshow(img)
     plt.show()
 
@@ -38,6 +36,40 @@ def train_test_split(X, y, test_size):
     X_test = X[indexes_test]
     y_test = y[indexes_test]
     return X_train, X_test, y_train, y_test, indexes_test
+
+
+# def contrast_normalization(img, s=1, epsilon=1e-8, lmbd=0):
+#     img_mean = np.mean(img)
+#     img_var = np.mean((img - img_mean) ** 2)
+#     img_norm = s*(img - img_mean) / max(epsilon, np.sqrt(lmbd + img_var))
+
+
+# def zca_whitening(inputs, epsilon=1e-8):
+#     sigma = np.dot(inputs, inputs.T) / inputs.shape[1] #Correlation matrix
+#     U,S,V = np.linalg.svd(sigma) #Singular Value Decomposition
+#     ZCAMatrix = np.dot(np.dot(U, np.diag(1.0/np.sqrt(np.diag(S) + epsilon))), U.T) #ZCA Whitening matrix
+#     return np.dot(ZCAMatrix, inputs)   #Data whitening
+
+def shuffle(*ndarray_list):
+    assert len(ndarray_list) > 0
+    if type(ndarray_list[0]) == np.ndarray:
+        size = ndarray_list[0].shape[0]
+    else:
+        size = len(ndarray_list[0])
+    for ndarray in ndarray_list:
+        if type(ndarray) == np.ndarray:
+            cur_size = ndarray.shape[0]
+        else:
+            cur_size = len(ndarray)
+        if cur_size != size:
+            raise ValueError("error: inconsisten shapes in shuffle")
+
+    shuffled_indexes = np.random.permutation([i for i in range(size)])
+    shuffled_ndarray_list = []
+    for ndarray in ndarray_list:
+        shuffled_ndarray_list.append(ndarray[shuffled_indexes])
+
+    return tuple(shuffled_ndarray_list)
 
 
 def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
@@ -93,12 +125,12 @@ def prepro_mnist(X_train, X_val, X_test):
 
 
 def prepro_cifar(X_train, X_val, X_test, img_shape):
-    # for i in range(0, 3072, 1024):
-    #     mean = np.mean(X_train[:,i:i+1024])
-    #     std = np.std(X_train[:,i:i+1024])
-    #     X_train[:,i:i+1024] = (X_train[:,i:i+1024] - mean) / std
-    #     X_val[:,i:i+1024] = (X_val[:,i:i+1024] - mean) / std
-    #     X_test[:,i:i+1024] = (X_test[:,i:i+1024] - mean) / std
+    for i in range(0, 3072, 1024):
+        mean = np.mean(X_train[:,i:i+1024])
+        std = np.std(X_train[:,i:i+1024])
+        X_train[:,i:i+1024] = (X_train[:,i:i+1024] - mean) / std
+        X_val[:,i:i+1024] = (X_val[:,i:i+1024] - mean) / std
+        X_test[:,i:i+1024] = (X_test[:,i:i+1024] - mean) / std
 
     X_train = X_train.reshape(-1, *img_shape)
     X_val = X_val.reshape(-1, *img_shape)
@@ -107,14 +139,43 @@ def prepro_cifar(X_train, X_val, X_test, img_shape):
     return X_train, X_val, X_test
 
 
-def data_augmentation(X, y, rotation_angle):
-    X_flipped = np.flip(X, 3)
-    X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
-    X_rotated_left = rotate(X, -rotation_angle, (2,3), reshape=False)
-    # import pudb; pudb.set_trace()
+def data_augmentation(X, y, rotation_angle, prob=0.5):
+    from scipy.ndimage.interpolation import rotate
+    X_flipped_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+    X_flipped = np.flip(X[X_flipped_indexes], 3)
+
+    X_rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+    X_rotated_right = rotate(X[X_rotated_right_indexes], rotation_angle, (2,3), reshape=False)
+
+    X_rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+    X_rotated_left = rotate(X[X_rotated_left_indexes], -rotation_angle, (2,3), reshape=False)
+
     X_aug = np.concatenate((X, X_flipped, X_rotated_right, X_rotated_left))
-    y_aug = np.concatenate((y, y, y, y))
+    y_aug = np.concatenate((y, y[X_flipped_indexes], y[X_rotated_right_indexes], y[X_rotated_left_indexes]))
     return X_aug, y_aug
+
+
+
+def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, prob = 0.5):
+    from scipy.ndimage.interpolation import rotate
+    y_aug = y
+
+    if flip==True:
+        X_flip_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        X_flipped = np.flip(X[X_flip_ind], 3)
+        y_aug = np.concatenate((y_aug,y[X_flip_ind]))
+        X_aug = np.concatenate((X, X_flipped))
+
+    if rotate==True:
+        X_rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+        X_rotated_right = rotate(X, rotation_angle, (2,3), reshape=False)
+        X_rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+        X_rotated_left = rotate(X, -rotation_angle, (2,3), reshape=False)
+        X_aug = np.concatenate((X, X_rotated_right, X_rotated_left))
+        y_aug = np.concatenate((y_aug,y[X_rotated_right_indexes],y[X_rotated_left_indexes]))
+    
+    return X_aug, y_aug
+
 
 
 """
