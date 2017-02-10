@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from convnet import ConvNet
-from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation
+from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, data_distortion
 from utils import train_test_split, dump_validation_and_architecture, vis_img, data_augmentation_new
 import pickle, csv, logging
 
@@ -175,11 +175,15 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
 
-    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
+    X_train_aug, y_train_aug = data_augmentation(X_train.reshape(-1, *img_shape), y_train)
+    X_train_aug = X_train_aug.reshape(-1, 3072)
+    print("X_train_aug", X_train_aug.shape)
+    X_dist, y_dist = data_distortion(X_train, y_train)
+    print("X_dist", X_dist.shape)
+    X_train = np.concatenate((X_train_aug, X_dist))
+    y_train = np.concatenate((y_train_aug, y_dist))
 
-    # does not yield any significant (or even noticable) imporvments, maybe give it another try
-    # X_train, y_train = data_augmentation(X_train, y_train, rotation_angle=7)
-    X_train, y_train = data_augmentation_new(X_train, y_train, rotation_angle=7)
+    X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
 
     log.info("X_train.shape = {}, X_val.shape = {}, X_test.shape = {}".format(X_train.shape, X_val.shape, X_test.shape))
 

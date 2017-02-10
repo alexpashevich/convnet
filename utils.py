@@ -140,7 +140,7 @@ def prepro_cifar(X_train, X_val, X_test, img_shape):
     return X_train, X_val, X_test
 
 
-def data_augmentation(X, y, rotation_angle, prob=0.5):
+def data_augmentation(X, y, rotation_angle=10, prob=0.5):
     from scipy.ndimage.interpolation import rotate
     X_flipped_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
     X_flipped = np.flip(X[X_flipped_indexes], 3)
@@ -156,8 +156,28 @@ def data_augmentation(X, y, rotation_angle, prob=0.5):
     return X_aug, y_aug
 
 
+def data_distortion(X, y, prob = 0.5):
+    std = np.std(X)
 
-def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, distortions = True, prob = 0.5):
+    X_dist_bright_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+    X_dist_bright = X[X_dist_bright_ind] + std / 3
+    X_dist_contrast_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+    X_dist_contrast = X[X_dist_contrast_ind]
+
+    for i in range(0, 3072, 1024):
+        mean = np.mean(X_dist_contrast[:,i:i+1024])
+        X_dist_contrast[:,i:i+1024] = (X_dist_contrast[:,i:i+1024] - mean) * 1.3 + mean
+
+    X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+    X_dist_hue = X[X_dist_hue_ind]
+    # for now: without fancy experiments, just changed a color a bit in one channel
+    X_dist_hue[:,1024:2048] = X_dist_hue[:,1024:2048] + std / 3
+    X_aug = np.concatenate((X_dist_bright, X_dist_contrast, X_dist_hue))
+    y_aug = np.concatenate((y[X_dist_bright_ind], y[X_dist_contrast_ind], y[X_dist_hue_ind]))
+    return X_aug, y_aug
+
+
+def data_augmentation_new(X, y, rotation_angle=10, flip = True, rotate = True, distortions = True, prob = 0.5):
     from scipy.ndimage.interpolation import rotate
     y_aug = y
     X_aug = X
@@ -178,7 +198,7 @@ def data_augmentation_new(X, y, rotation_angle, flip = True, rotate = True, dist
 
     if distortions==True:
         X_dist_bright_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        X_dist_bright = X[X_dist_bright_ind] + 0.15
+        X_dist_bright = X[X_dist_bright_ind] + 0.01
         X_dist_contrast_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
         X_dist_contrast = X[X_dist_contrast_ind]
 
