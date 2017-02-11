@@ -177,6 +177,45 @@ def data_distortion(X, y, prob = 0.5):
     return X_aug, y_aug
 
 
+def distort_brightness(img, params):
+    if np.random.random() < params['brightness_prob']:
+        rnd_brightness = np.random.uniform(-params['brightness_delta'],
+                                           params['brightness_delta'])
+        img = img + rnd_brightness
+    return img
+ 
+ 
+def distort_contrast(img, params):
+    if np.random.random() < params['contrast_prob']:
+        rnd_contrast = np.random.uniform(1-params['contrast_delta'],
+                                         1+params['contrast_delta'])
+        img = img * rnd_contrast
+    return img
+ 
+ 
+def distort_saturation(img, params):
+    if np.random.random() < params['saturation_prob']:
+        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        hue, saturation, value = np.split(hsv, 3, axis=2)
+        rnd_saturation = np.random.uniform(1-params['saturation_delta'],
+                                           1+params['saturation_delta'])
+        saturation *= rnd_saturation
+        hsv = np.dstack([hue, saturation, value])
+        img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+    return img
+ 
+ 
+def distort_hue(img, params):
+    if np.random.random() < params['hue_prob']:
+        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        rnd_hue = np.random.uniform(-params['hue_delta'], params['hue_delta'])
+        hue, saturation, value = np.split(hsv, 3, axis=2)
+        hue += rnd_hue
+        hsv = np.dstack([hue, saturation, value])
+        img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+    return img
+
+
 def data_augmentation_new(X, y, rotation_angle=10, flip = True, rotate = True, distortions = True, prob = 0.5):
     from scipy.ndimage.interpolation import rotate
     y_aug = y
