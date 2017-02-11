@@ -8,6 +8,7 @@ class FCLayer(object):
         self.input_size = layer_info["input_size"]
         self.output_size = layer_info["output_size"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
+
         if "W" in layer_info:
             self.W = layer_info["W"]
         else:
@@ -24,7 +25,7 @@ class FCLayer(object):
     def get_b_shape(self):
         return self.b.shape
 
-    def forwardprop(self, X):
+    def forwardprop(self, X, test=False):
         ''' X - [batch_size, input_size] '''
 
         out = X @ self.W + np.outer(np.ones(X.shape[0]), self.b)
@@ -36,6 +37,7 @@ class FCLayer(object):
         else:
             print("error: unknown activation type")
             out = out
+
         return out
 
     def backprop(self, error_batch, cur_out_batch, prev_out_batch):

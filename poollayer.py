@@ -29,7 +29,7 @@ class PoolLayer(object):
         j = j.astype(int)
         return k, i, j
 
-    def forwardprop(self, X):
+    def forwardprop(self, X, test=False):
          # print("X.shape = ", X.shape)
         n, d, h, w = X.shape
         # we want even height and width of the picture

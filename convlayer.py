@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 from utils import get_im2col_indices, ReLU
 
 class ConvLayer(object):
-    def __init__(self, layer_info): 
+    def __init__(self, layer_info):
         # W - [out_channels, in_channels, height, width]
         self.in_channels = layer_info["in_channels"]
         self.out_channels = layer_info["out_channels"]
@@ -12,6 +12,11 @@ class ConvLayer(object):
         self.stride = layer_info["stride"]
         self.padding = layer_info["padding"]
         self.activation_type = layer_info["activation_type"] # so far only ReLU is implemented
+        if "dropout" in layer_info:
+            self.dropout = layer_info["dropout"]
+        else:
+            self.dropout = 0
+        self.dropout_bin = None
         if "W" in layer_info:
             self.W = layer_info["W"]
         else:
@@ -53,7 +58,7 @@ class ConvLayer(object):
         # print('Fast thing computed in {:6f}'.format(timer() - time))
         return output
         
-    def forwardprop(self, X, slow=False):
+    def forwardprop(self, X, slow=False, test=False):
         """
         X - [batch_size, in_channels, in_height, in_width]
         """
@@ -76,6 +81,10 @@ class ConvLayer(object):
         else:
             print("error: unknown activation type")
             output = output
+
+        if self.dropout > 0 and test is False:
+            self.dropout_bin = np.random.binomial(output.size, 1 - self.dropout, size = output.shape) / (1. - self.dropout)
+            output *= self.dropout_bin
         return output
 
 
@@ -115,6 +124,10 @@ class ConvLayer(object):
             error_batch[cur_out_batch <= 0] = 0 # Step 1
         elif self.activation_type != "None":
             print("error: unknown activation type")
+
+        if self.dropout > 0:
+            error_batch *= self.dropout_bin
+            self.dropout_bin = None
 
         X = prev_out_batch # previous output of the layer
         batch_size, in_channels, in_height, in_width = X.shape

@@ -10,3 +10,4 @@ Data/*
 logs/*
 external/*
 dumps/*
+pylearn2/*

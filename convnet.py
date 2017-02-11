@@ -58,7 +58,7 @@ class ConvNet:
             print("error: unknown layer type")
 
 
-    def forward_pass(self, X):
+    def forward_pass(self, X, test=False):
         ''' return the input data X and outputs of every layer '''
         cur_input = X
         outputs = []
@@ -74,7 +74,7 @@ class ConvNet:
                 # ConvLayer -> FCLayer, we have to resize the input
                 cur_input = cur_input.reshape(-1, cur_input.shape[1] * cur_input.shape[2] * cur_input.shape[3])
 
-            cur_input = layer.forwardprop(cur_input)
+            cur_input = layer.forwardprop(cur_input, test)
             outputs.append(cur_input)
 
         if len(cur_input.shape) > 2:
@@ -302,7 +302,7 @@ class ConvNet:
         ''' make prediction for all elements in X_test based on the learnt model '''
         y_test = []
         for X in X_test:
-            prediction = np.argmax(self.forward_pass(X)[-1])
+            prediction = np.argmax(self.forward_pass(X, test=True)[-1])
             y_test.append(prediction)
         return np.array(y_test)
 
