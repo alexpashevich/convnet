@@ -192,9 +192,9 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     dump_folder.mkdir()
 
     ch1 = 24
-    ch2 = 48
-    ch3 = 1024
-    ch4 = 128
+    ch2 = 32
+    ch3 = 48
+    ch4 = 64
     nb_classes = 10
 
     fc_size_in1 = 8*8*ch2
@@ -222,10 +222,10 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
                                                  "out_channels": ch2,
-                                                 "height": 5,
-                                                 "width": 5,
+                                                 "height": 3,
+                                                 "width": 3,
                                                  "stride": 1,
-                                                 "padding": 2,
+                                                 "padding": 1,
                                                 "activation_type": "ReLU"}) # 16 x 16 x ch2
         # cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
         #                                          "out_channels": ch4,
@@ -235,17 +235,23 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         #                                          "padding": 1,
         #                                         "activation_type": "ReLU"}) # 16 x 16 x ch4
         cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
-
-
-
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
                                                  "out_channels": ch3,
-                                                 "height": 8,
-                                                 "width": 8,
+                                                 "height": 5,
+                                                 "width": 5,
+                                                 "stride": 1,
+                                                 "padding": 2,
+                                                 "activation_type": "ReLU"}) # 1 x 1 x ch3
+        cnn.add_layer("poollayer", layer_info = {"stride":2, "size": 2, "type": "maxpool"})
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                                 "out_channels": ch4,
+                                                 "height": 3,
+                                                 "width": 3,
                                                  "stride": 1,
                                                  "padding": 0,
                                                  "activation_type": "ReLU"}) # 1 x 1 x ch3
-        cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+        cnn.add_layer("poollayer", layer_info = {"stride":2, "size": 2, "type": "maxpool"})
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch4,
                                                  "out_channels": nb_classes,
                                                  "height": 1,
                                                  "width": 1,
@@ -329,7 +335,7 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
             y_cv = y_val,
             minibatch_size = 50,
             nb_epochs = 40,
-            step_size = 0.01,
+            step_size = 0.001,
             optimizer='adam',
             path_for_dump = dump_folder)
 
