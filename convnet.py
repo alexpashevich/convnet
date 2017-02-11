@@ -272,7 +272,7 @@ class ConvNet:
                     else:
                         raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
-            if iter!=0 and iter % 5 == 0:
+            if iter!=0 and iter % 10 == 0:
                 step_size /= 2
 
             log.info("Loss = {}".format(loss / X_train.shape[0]))
