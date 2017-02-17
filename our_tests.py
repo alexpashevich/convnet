@@ -29,9 +29,9 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
     
-    from utils import data_augmentation_very_new
+    # from utils import data_augmentation_very_new
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
-    X_train, y_train = data_augmentation_very_new(X_train, y_train, prob=1, rotate=False, hue_bool=False, contrast = False,  saturation=False)
+    # X_train, y_train = data_augmentation_very_new(X_train, y_train, prob=1, rotate=False, contrast = False)
 
     log.info("X_train.shape = {}, X_val.shape = {}, X_test.shape = {}".format(X_train.shape, X_val.shape, X_test.shape))
 

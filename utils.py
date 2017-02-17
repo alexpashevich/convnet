@@ -185,7 +185,6 @@ def data_augmentation_very_new(X, y, prob = 0.5,
         hue_bool=True, hue_const = 0.13):
     X_aug = X
     y_aug = y
-    from cv2 import COLOR_HSV2RGB, COLOR_RGB2HSV, cvtColor
 
     if flip==True:
         X_flip_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
@@ -194,6 +193,7 @@ def data_augmentation_very_new(X, y, prob = 0.5,
         X_aug = np.concatenate((X_aug, X_flipped))
 
     if rotate==True:
+        from scipy.ndimage.interpolation import rotate
         rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
         X_rotated_right = rotate(X[rotated_right_indexes], rotation_angle, (2,3), reshape=False)
         rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
@@ -215,34 +215,36 @@ def data_augmentation_very_new(X, y, prob = 0.5,
         X_aug = np.concatenate((X_aug, X_dist_contrast))
         y_aug = np.concatenate((y_aug, y[X_dist_contrast_ind]))
 
-    if saturation==True:
-        X_dist_sat_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        img_batch = X[X_dist_sat_ind]
-        img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
-        for i in range(len(X_dist_sat_ind)):
-            hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
-            hue, saturation, value = np.split(hsv, 3, axis=2)
-            rnd_saturation = np.random.uniform(1-sat_const, 1+sat_const)
-            saturation *= rnd_saturation
-            hsv = np.dstack([hue, saturation, value])
-            img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
-        X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
-        y_aug = np.concatenate((y_aug, y[X_dist_sat_ind]))
+    # if saturation==True:
+    #     from cv2 import COLOR_HSV2RGB, COLOR_RGB2HSV, cvtColor
+    #     X_dist_sat_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+    #     img_batch = X[X_dist_sat_ind]
+    #     img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
+    #     for i in range(len(X_dist_sat_ind)):
+    #         hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
+    #         hue, saturation, value = np.split(hsv, 3, axis=2)
+    #         rnd_saturation = np.random.uniform(1-sat_const, 1+sat_const)
+    #         saturation *= rnd_saturation
+    #         hsv = np.dstack([hue, saturation, value])
+    #         img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
+    #     X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
+    #     y_aug = np.concatenate((y_aug, y[X_dist_sat_ind]))
     
-    if hue_bool==True:
-        X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        img_batch = X[X_dist_hue_ind]
-        img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
-        for i in range(len(X_dist_hue_ind)):
-            hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
-            hue, saturation, value = np.split(hsv, 3, axis=2)
-            rnd_hue = np.random.uniform(-hue_const, hue_const)
-            hue += rnd_hue
-            hsv = np.dstack([hue, saturation, value])
-            img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
+    # if hue_bool==True:
+    #     from cv2 import COLOR_HSV2RGB, COLOR_RGB2HSV, cvtColor
+    #     X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+    #     img_batch = X[X_dist_hue_ind]
+    #     img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
+    #     for i in range(len(X_dist_hue_ind)):
+    #         hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
+    #         hue, saturation, value = np.split(hsv, 3, axis=2)
+    #         rnd_hue = np.random.uniform(-hue_const, hue_const)
+    #         hue += rnd_hue
+    #         hsv = np.dstack([hue, saturation, value])
+    #         img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
 
-        X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
-        y_aug = np.concatenate((y_aug, y[X_dist_hue_ind]))
+    #     X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
+    #     y_aug = np.concatenate((y_aug, y[X_dist_hue_ind]))
 
     return X_aug, y_aug
 
