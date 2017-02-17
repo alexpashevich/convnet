@@ -3,7 +3,6 @@
 Do convnet experiments
 
 Usage:
-    main.py test (moons|kaggle|poollayer|mnist)
     main.py run kaggle_cnn
     main.py continue kaggle_cnn [--cnn_path <string>] [--val_ind_path <string>] [options]
     main.py run prediction [--dump_path <string>] [options]
@@ -30,7 +29,7 @@ import logging
 import sys
 sys.path.append("external/hipsternet")
 
-from our_tests import test_moons, test_kaggle_fcnn, test_poollayer, run_kaggle_cnn, test_mnist, predict_with_dump
+from our_tests import run_kaggle_cnn, predict_with_dump
 
 
 LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
@@ -59,22 +58,11 @@ def start_logging_to_file(filename=None):
     log.info('Starting logging to file {}'.format(logfilename))
 
 def main(args):
-    if args['test']:
-        if args['moons']:
-            test_moons()
-        elif args['kaggle']:
-            test_kaggle_fcnn()
-        elif args['mnist']:
-            test_mnist()
-        elif args['poollayer']:
-            test_poollayer()
-    elif args['run']:
+    if args['run']:
         if args['prediction']:
             if '--dump_path' in args and args['--dump_path'] is not None:
                 predict_with_dump(args['--dump_path'])
         elif args['kaggle_cnn']:
-            # run_info = {}
-            # if args['--augmentation']
             run_kaggle_cnn(DATETIME_NOW)
     elif args['continue']:
         if args['kaggle_cnn']:
