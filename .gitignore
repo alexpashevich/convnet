@@ -2,14 +2,9 @@
 *.pyc
 .DS_Store
 __pycache__/*
-read_file.py
-yann.py
 convnet.sublime-project
 convnet.sublime-workspace
 Data/*
 logs/*
 external/*
 dumps/*
-pylearn2/*
-zca/*
-preprocess.py

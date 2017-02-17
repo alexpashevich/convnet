@@ -201,7 +201,11 @@ class ConvNet:
             opt_params = gamma
         elif optimizer == 'adam':
             opt_params = (beta1, beta2)
-        log.info("Running for {} with step_size {}, minibatch_size = {}, epsilon = {}, opt_params = {}".format(optimizer, step_size, minibatch_size, epsilon, opt_params))
+        log.info("Running for {} with step_size {}, minibatch_size = {}, epsilon = {}, opt_params = {}".format(optimizer, 
+                                                                                                               step_size,
+                                                                                                               minibatch_size,
+                                                                                                               epsilon,
+                                                                                                               opt_params))
 
         # do the label preprocessing first
         y_train_vector = np.zeros((y_train.shape[0], K))
@@ -273,7 +277,7 @@ class ConvNet:
                         raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
             if iter!=0 and iter % 10 == 0:
-                step_size /= 2
+                step_size /= 10
 
             log.info("Loss = {}".format(loss / X_train.shape[0]))
 
