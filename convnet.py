@@ -272,8 +272,8 @@ class ConvNet:
                     else:
                         raise ValueError('error: unknown optimizer {}'.format(optimizer))
 
-            if iter!=0 and iter % 5 == 0:
-                step_size /= 2
+            if iter!=0 and iter % 10 == 0:
+                step_size /= 10
 
             log.info("Loss = {}".format(loss / X_train.shape[0]))
 
@@ -287,9 +287,10 @@ class ConvNet:
                 log.info("Accuracy on validation = {}".format(accs))
 
             if proc_of_train_to_validate > 0:
-                y_train_pred_full = self.predict(X_train)
-                accs_full = (y_train_pred_full == y_train).sum() / y_train.size
-                log.info("Accuracy on train = {}".format(accs_full))
+                sampled_indexes_train = np.random.choice(X_train.shape[0], int(X_train.shape[0] * proc_of_train_to_validate), replace=False)
+                y_train_pred = self.predict(X_train[sampled_indexes_train])
+                accs = (y_train_pred == y_train[sampled_indexes_train]).sum() / y_train[sampled_indexes_train].size
+                log.info("Accuracy on train = {}".format(accs))
 
             epoch_time = timer() - time
             log.info('epoch is computed in {}m {}s'.format(epoch_time // 60, int((timer() - time) % 60)))

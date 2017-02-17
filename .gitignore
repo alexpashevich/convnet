@@ -11,3 +11,5 @@ logs/*
 external/*
 dumps/*
 pylearn2/*
+zca/*
+preprocess.py

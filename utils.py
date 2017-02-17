@@ -176,50 +176,16 @@ def data_distortion(X, y, prob = 0.5):
     y_aug = np.concatenate((y[X_dist_bright_ind], y[X_dist_contrast_ind], y[X_dist_hue_ind]))
     return X_aug, y_aug
 
-
-def distort_brightness(img, params):
-    if np.random.random() < params['brightness_prob']:
-        rnd_brightness = np.random.uniform(-params['brightness_delta'],
-                                           params['brightness_delta'])
-        img = img + rnd_brightness
-    return img
- 
- 
-def distort_contrast(img, params):
-    if np.random.random() < params['contrast_prob']:
-        rnd_contrast = np.random.uniform(1-params['contrast_delta'],
-                                         1+params['contrast_delta'])
-        img = img * rnd_contrast
-    return img
- 
- 
-def distort_saturation(img, params):
-    if np.random.random() < params['saturation_prob']:
-        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        hue, saturation, value = np.split(hsv, 3, axis=2)
-        rnd_saturation = np.random.uniform(1-params['saturation_delta'],
-                                           1+params['saturation_delta'])
-        saturation *= rnd_saturation
-        hsv = np.dstack([hue, saturation, value])
-        img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    return img
- 
- 
-def distort_hue(img, params):
-    if np.random.random() < params['hue_prob']:
-        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        rnd_hue = np.random.uniform(-params['hue_delta'], params['hue_delta'])
-        hue, saturation, value = np.split(hsv, 3, axis=2)
-        hue += rnd_hue
-        hsv = np.dstack([hue, saturation, value])
-        img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-    return img
-
-
-def data_augmentation_new(X, y, rotation_angle=10, flip = True, rotate = True, distortions = True, prob = 0.5):
-    from scipy.ndimage.interpolation import rotate
-    y_aug = y
+def data_augmentation_very_new(X, y, prob = 0.5, 
+        rotate=False, rotation_angle=10, 
+        flip=True, 
+        bright=True, bright_const = 0.02,
+        contrast=True, contrast_const = 0.03,
+        saturation=True, sat_const = 0.14,
+        hue_bool=True, hue_const = 0.13):
     X_aug = X
+    y_aug = y
+    from cv2 import COLOR_HSV2RGB, COLOR_RGB2HSV, cvtColor
 
     if flip==True:
         X_flip_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
@@ -228,32 +194,78 @@ def data_augmentation_new(X, y, rotation_angle=10, flip = True, rotate = True, d
         X_aug = np.concatenate((X_aug, X_flipped))
 
     if rotate==True:
-        X_rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+        rotated_right_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
         X_rotated_right = rotate(X[rotated_right_indexes], rotation_angle, (2,3), reshape=False)
-        X_rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
+        rotated_left_indexes = np.random.choice(X.shape[0], int(X.shape[0] * prob), replace=False)
         X_rotated_left = rotate(X[rotated_left_indexes], -rotation_angle, (2,3), reshape=False)
         X_aug = np.concatenate((X_aug, X_rotated_right, X_rotated_left))
-        y_aug = np.concatenate((y_aug,y[X_rotated_right_indexes],y[X_rotated_left_indexes]))
+        y_aug = np.concatenate((y_aug,y[rotated_right_indexes],y[rotated_left_indexes]))
 
-    if distortions==True:
+    if bright==True:
         X_dist_bright_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        X_dist_bright = X[X_dist_bright_ind] + 0.01
+        rnd_brightness = np.random.uniform(-bright_const, bright_const)
+        X_dist_bright = X[X_dist_bright_ind] + rnd_brightness
+        X_aug = np.concatenate((X_aug, X_dist_bright))
+        y_aug = np.concatenate((y_aug, y[X_dist_bright_ind]))
+
+    if contrast==True:
         X_dist_contrast_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        X_dist_contrast = X[X_dist_contrast_ind]
+        rnd_contrast = np.random.uniform(1-contrast_const, 1+contrast_const)
+        X_dist_contrast = X[X_dist_contrast_ind]*rnd_contrast
+        X_aug = np.concatenate((X_aug, X_dist_contrast))
+        y_aug = np.concatenate((y_aug, y[X_dist_contrast_ind]))
 
-        for i in range(0, X_dist_contrast.shape[1]):
-            mean = np.mean(X_dist_contrast[:,i,:])
-            X_dist_contrast[:,i:i+1024] = (X_dist_contrast[:,i:i+1024] - mean)*1.3
-
-        X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
-        X_dist_hue = X[X_dist_hue_ind]
-        # for now: without fancy experiments, just changed a color a bit in one channel
-        X_dist_hue[:,1024:2048] = X_dist_hue[:,1024:2048] + 0.15
-        X_aug = np.concatenate((X_aug, X_dist_bright, X_dist_contrast, X_dist_hue))
-        y_aug = np.concatenate((y_aug, y[X_dist_bright_ind], y[X_dist_contrast_ind], y[X_dist_hue_ind]))
+    if saturation==True:
+        X_dist_sat_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        img_batch = X[X_dist_sat_ind]
+        img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
+        for i in range(len(X_dist_sat_ind)):
+            hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
+            hue, saturation, value = np.split(hsv, 3, axis=2)
+            rnd_saturation = np.random.uniform(1-sat_const, 1+sat_const)
+            saturation *= rnd_saturation
+            hsv = np.dstack([hue, saturation, value])
+            img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
+        X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
+        y_aug = np.concatenate((y_aug, y[X_dist_sat_ind]))
     
+    if hue_bool==True:
+        X_dist_hue_ind = np.random.choice(X.shape[0], int(X.shape[0]*prob), replace=False)
+        img_batch = X[X_dist_hue_ind]
+        img_batch = img_batch.transpose(0,2,3,1).astype(np.float32)
+        for i in range(len(X_dist_hue_ind)):
+            hsv = cvtColor(img_batch[i, :, :, :], COLOR_RGB2HSV)
+            hue, saturation, value = np.split(hsv, 3, axis=2)
+            rnd_hue = np.random.uniform(-hue_const, hue_const)
+            hue += rnd_hue
+            hsv = np.dstack([hue, saturation, value])
+            img_batch[i, :, :, :] = cvtColor(hsv, COLOR_HSV2RGB) 
+
+        X_aug = np.concatenate((X_aug, img_batch.transpose(0,3,1,2).astype(np.float_)))
+        y_aug = np.concatenate((y_aug, y[X_dist_hue_ind]))
+
     return X_aug, y_aug
 
+
+def get_full_data(X_train_kaggle, preprocess):
+    X_list = []
+    y_list = []
+    for i in range(1, 6):
+        X_list.append(unpickle("Data/cifar_orig/data_batch_" + str(i))[b'data'])
+        y_list.append(unpickle("Data/cifar_orig/data_batch_" + str(i))[b'labels'])
+
+    X_train_full = np.concatenate((X_list[0], X_list[1], X_list[2], X_list[3], X_list[4]))
+    y_train_full = np.concatenate((y_list[0], y_list[1], y_list[2], y_list[3], y_list[4]))
+
+    if preprocess:
+        for i in range(0, 3072, 1024):
+            mean_full = np.mean(X_train_full[:,i:i+1024])
+            std_full = np.std(X_train_full[:,i:i+1024])
+            mean_kaggle = np.mean(X_train_kaggle[:,i:i+1024])
+            std_kaggle = np.std(X_train_kaggle[:,i:i+1024])
+            X_train_full[:,i:i+1024] = (X_train_full[:,i:i+1024] - mean_full) / std_full * std_kaggle + mean_kaggle
+
+    return X_train_full, y_train_full
 
 
 """

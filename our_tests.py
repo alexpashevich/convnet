@@ -1,101 +1,15 @@
-
 # import matplotlib.pyplot as plt
 import numpy as np
-# from sklearn.model_selection import train_test_split
-# from sklearn.datasets import make_moons
-# import hipsternet.input_data as input_data
 from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from convnet import ConvNet
 from utils import get_data_fast, get_im2col_indices, prepro_mnist, prepro_cifar, data_augmentation, data_distortion
-from utils import train_test_split, dump_validation_and_architecture, vis_img, data_augmentation_new
+from utils import train_test_split, dump_validation_and_architecture, vis_img, get_full_data
 import pickle, csv, logging
 
-HIPSTERNET = Path('external/hipsternet')
 DUMPFOLDER = Path('dumps')
 log = logging.getLogger(__name__)
-
-def test_conv_layer(valsize, seed):
-    # Data loading
-    X_train_full = get_data_fast("Xtr")[:,:-1]
-    X_test = get_data_fast("Xte")[:,:-1]
-    y_train_full = get_data_fast("Ytr")[:,1]
-    X_train, X_val, y_train, y_val, _ = train_test_split(X_train_full, y_train_full, test_size = valsize)
-                    
-    ch1 = 12
-    cnn = ConvNet()
-    cnn.add_layer("convlayer", layer_info = {"in_channels": 3,
-                                             "out_channels": ch1,
-                                             "height": 5,
-                                             "width": 5,
-                                             "stride": 1,
-                                             "padding": 0,
-                                             "activation_type": "None"})
-
-    np.random.seed(100)
-    xtr_res = X_train.reshape(-1, 3, 32,32)
-    input_batch = xtr_res[:3, :, :, :]
-    V = cnn.layers[0].forwardprop(input_batch)
-    # Traspose img to [batch_size, channels, im_height, im_width]
-    # W1 = np.random.normal(0, 1, (12, 3, 5, 5)) # random weights, 12 filters
-    
-    W1 = np.ones((12,3,5,5)) * 0.01
-    b1 = np.ones([12]) * 0.01
-    # Doing forward pass
-    er1 = np.random.random(V.shape)
-    B = cnn.layers[0].backprop(V-er1, V, input_batch)
-
-    import sys
-    sys.path.append(str(HIPSTERNET))
-    import hipsternet.layer as hl
-    out, cache =  hl.conv_forward(input_batch, W1, np.expand_dims(b1, 1), stride = 1, padding = 0)
-    OUT = hl.conv_backward(out - er1, cache)
-
-    print('hip_to_mine_conv_mistake = {}'.format(np.mean(V - out)))
-    print('hip_to_mine_grad_mistake = {}'.format(np.mean(B[0] - OUT[1])))
-    print('hip_to_mine_grad_sum  = {} {}'.format(np.sum(B[0]), np.sum(OUT[1])))
-
-    # sys.exit()
-
-    # TENSORFLOW RELATED STUFF
-    # INPUTS: batch|channels|height|width --> batch|height|width|channels
-    tf_input_batch = input_batch.transpose(0, 2, 3, 1)
-    # WEIGHTS: out_channels|in_channels|height|width ---> heigh|width|in_channels|out_channels
-    tf_W1 = W1.transpose(2, 3, 1, 0)
-    # LOSS: like inputs
-    tf_er1 = er1.transpose(0, 2, 3, 1)
-
-    # Convolution
-    ibatch_ = tf.placeholder(tf.float32, shape=tf_input_batch.shape)
-    W_ = tf.Variable(initial_value=tf_W1, dtype=tf.float32)
-    b_ = tf.Variable(initial_value=b1, dtype=tf.float32)
-    conv  = tf.nn.conv2d(ibatch_, W_, strides=[1,1,1,1], padding='VALID', use_cudnn_on_gpu=False)
-    pre_activation = tf.nn.bias_add(conv, b_)
-    # conv2 = tf.nn.relu(pre_activation)
-    conv2 = pre_activation
-
-    # Conv gradients
-    er1_ = tf.placeholder(tf.float32, shape=tf_er1.shape)
-    silly_loss = conv2-er1_
-    tfgrad = tf.gradients(silly_loss, W_)
-
-    # more grads
-    opt = tf.train.GradientDescentOptimizer(0.001)
-    grads = opt.compute_gradients(silly_loss)
-
-    with tf.Session() as sess:
-        with tf.device('/cpu:0'):
-            sess.run(tf.global_variables_initializer())
-            V_, B_, loss_, grads_ = sess.run([conv2, tfgrad, silly_loss, grads], feed_dict={
-                ibatch_:tf_input_batch.astype('float32'),
-                er1_: tf_er1.astype('float32')})
-
-    print('TF_conv_mistake = {}'.format(np.mean(V.transpose(0, 2, 3, 1) - V_)))
-    print('TF_grad_mistake = {}'.format(np.mean(B[0].transpose(2, 3, 1, 0) - B_)))
-    print('TF_grad_sum  = {} {}'.format(np.sum(B[0].transpose(2, 3, 1, 0)), np.sum(B_)))
-
-    # plt.imshow(V[:, :, 3])
 
 def test_moons():
     X, Y = make_moons(n_samples=7000, random_state=42, noise=0.1)
@@ -164,8 +78,10 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
     X_test = get_data_fast("Xte")[:,:-1]
     y_train_full = get_data_fast("Ytr")[:,1].astype(int)
 
+    # X_train_big, y_train_big = get_full_data(X_train_full, False)
+
     if val_ind_path is None:
-        X_train, X_val, y_train, y_val, val_indexes = train_test_split(X_train_full, y_train_full, test_size = 0.05)
+        X_train, X_val, y_train, y_val, val_indexes = train_test_split(X_train_full, y_train_full, test_size = 0.2)
     else:
         val_indexes = pickle.load(Path(val_ind_path).open('rb'))
         X_val, y_val = X_train_full[val_indexes], y_train_full[val_indexes]
@@ -174,17 +90,38 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
 
     nb_samples, data_length, nb_classes = X_train.shape[0], X_train.shape[1], y_train.max() + 1
     img_shape = (3, 32, 32)
-
+    
+    from utils import data_augmentation_very_new
     X_train, X_val, X_test = prepro_cifar(X_train, X_val, X_test, img_shape)
+    X_train, y_train = data_augmentation_very_new(X_train, y_train, prob=1, rotate=False, hue_bool=False, contrast = False,  saturation=False)
+    #
+    # from zca import ZCA
+    # trf_r = ZCA().fit(X_train_full[:,:1024])
+    # trf_g = ZCA().fit(X_train_full[:,1024:2048])
+    # trf_b = ZCA().fit(X_train_full[:,2048:])
+    # X_train_r_whitened = trf_r.transform(X_train[:,:1024])
+    # X_train_g_whitened = trf_g.transform(X_train[:,1024:2048])
+    # X_train_b_whitened = trf_b.transform(X_train[:,2048:])
+
+    # X_train = np.concatenate((X_train_r_whitened, X_train_g_whitened, X_train_b_whitened), axis=1)
+    # X_train_big = np.concatenate((trf_r.transform(X_train_big[:,:1024]), trf_g.transform(X_train_big[:,1024:2048]), trf_b.transform(X_train_big[:,2048:])), axis=1)
+    # X_val = np.concatenate((trf_r.transform(X_val[:,:1024]), trf_g.transform(X_val[:,1024:2048]), trf_b.transform(X_val[:,2048:])), axis=1)
+
+    # X_train = X_train.reshape(-1, *img_shape)
+    # X_train_big = X_train_big.reshape(-1, *img_shape)
+    # X_val = X_val.reshape(-1, *img_shape)
+    # X_test = X_test.reshape(-1, *img_shape)
+    #
 
     log.info("X_train.shape = {}, X_val.shape = {}, X_test.shape = {}".format(X_train.shape, X_val.shape, X_test.shape))
 
     dump_folder = DUMPFOLDER/datetime_string
     dump_folder.mkdir()
 
-    ch1 = 32
+    ch1 = 48
     ch2 = 64
-    ch3 = 1024
+    ch3 = 96
+    ch4 = 128
     nb_classes = 10
 
     fc_size_in1 = 8*8*ch2
@@ -197,31 +134,37 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         cnn.set_img_shape(img_shape)
         cnn.add_layer("convlayer", layer_info = {"in_channels": img_shape[0],
                                                  "out_channels": ch1,
-                                                 "height": 5,
-                                                 "width": 5,
+                                                 "height": 3,
+                                                 "width": 3,
                                                  "stride": 1,
-                                                 "padding": 2,
-                                                 "dropout": 0.5,
+                                                 "padding": 1,
                                                  "activation_type": "ReLU"}) # 32 x 32 x ch1
         cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 16 x 16 x ch1
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
                                                  "out_channels": ch2,
-                                                 "height": 5,
-                                                 "width": 5,
+                                                 "height": 3,
+                                                 "width": 3,
                                                  "stride": 1,
-                                                 "padding": 2,
-                                                 # "dropout": 0.5,
+                                                 "padding": 1,
                                                 "activation_type": "ReLU"}) # 16 x 16 x ch2
         cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 8 x 8 x ch2
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,
                                                  "out_channels": ch3,
-                                                 "height": 8,
-                                                 "width": 8,
+                                                 "height": 3,
+                                                 "width": 3,
                                                  "stride": 1,
                                                  "padding": 0,
-                                                 # "dropout": 0.5,
-                                                 "activation_type": "ReLU"}) # 1 x 1 x ch3
+                                                 "activation_type": "ReLU"}) # 6 x 6 x ch3
+        cnn.add_layer("poollayer", layer_info = {"stride":2, "size": 2, "type": "maxpool"}) # 3 x 3 x ch3
         cnn.add_layer("convlayer", layer_info = {"in_channels": ch3,
+                                                 "out_channels": ch4,
+                                                 "height": 3,
+                                                 "width": 3,
+                                                 "stride": 1,
+                                                 "padding": 0,
+                                                 "activation_type": "ReLU"}) # 1 x 1 x ch4
+        # cnn.add_layer("poollayer", layer_info = {"stride":2, "size": 2, "type": "maxpool"})
+        cnn.add_layer("convlayer", layer_info = {"in_channels": ch4,
                                                  "out_channels": nb_classes,
                                                  "height": 1,
                                                  "width": 1,
@@ -233,6 +176,7 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
         cnn.load_nn(Path(cnn_load_path))
 
     dump_validation_and_architecture(dump_folder/'validation_indexes.dat', val_indexes, dump_folder/'info.txt', cnn.get_description())
+  
 
     cnn.fit(X_train,
             y_train,
@@ -241,7 +185,7 @@ def run_kaggle_cnn(datetime_string, cnn_load_path = None, val_ind_path = None):
             y_cv = y_val,
             minibatch_size = 50,
             nb_epochs = 40,
-            step_size = 0.01,
+            step_size = 0.001,
             optimizer='rmsprop',
             path_for_dump = dump_folder)
 
@@ -295,6 +239,7 @@ def test_mnist():
                                              "width": 5,
                                              "stride": 1,
                                              "padding": 2,
+                                             "dropout": 0.5,
                                              "activation_type": "ReLU"}) # 28 x 28 x ch1
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 14 x 14 x ch1
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch1,
@@ -303,6 +248,7 @@ def test_mnist():
                                              "width": 5,
                                              "stride": 1,
                                              "padding": 2,
+                                             "dropout":0.5,
                                             "activation_type": "ReLU"}) # 14 x 14 x ch2
     cnn.add_layer("poollayer", layer_info = {"stride": 2, "size": 2, "type": "maxpool"}) # 7 x 7 x ch2
     cnn.add_layer("convlayer", layer_info = {"in_channels": ch2,

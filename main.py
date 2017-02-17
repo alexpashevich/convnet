@@ -4,9 +4,7 @@ Do convnet experiments
 
 Usage:
     main.py test (moons|kaggle|poollayer|mnist)
-    main.py test conv [--valsize <float>] [--seed <int>] [options]
     main.py run kaggle_cnn
-    main.py test tensorflow (full|slim)
     main.py continue kaggle_cnn [--cnn_path <string>] [--val_ind_path <string>] [options]
     main.py run prediction [--dump_path <string>] [options]
 
@@ -32,8 +30,7 @@ import logging
 import sys
 sys.path.append("external/hipsternet")
 
-from our_tests import test_moons, test_kaggle_fcnn, test_poollayer, run_kaggle_cnn, test_conv_layer, test_mnist, predict_with_dump
-from tf_tests import test_tensorflow_full, test_tensorflow_slim
+from our_tests import test_moons, test_kaggle_fcnn, test_poollayer, run_kaggle_cnn, test_mnist, predict_with_dump
 
 
 LOG_FORMATTER = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s",
@@ -71,17 +68,6 @@ def main(args):
             test_mnist()
         elif args['poollayer']:
             test_poollayer()
-        elif args['conv']:
-            valsize = float(args['--valsize'])
-            seed = None
-            if '--seed' in args and args['--seed'] is not None:
-                seed = int(args['--seed'])
-            test_conv_layer(valsize, seed)
-        elif args['tensorflow']:
-            if args['full']:
-                test_tensorflow_full()
-            elif args['slim']:
-                test_tensorflow_slim()
     elif args['run']:
         if args['prediction']:
             if '--dump_path' in args and args['--dump_path'] is not None:

@@ -20,7 +20,8 @@ class ConvLayer(object):
         if "W" in layer_info:
             self.W = layer_info["W"]
         else:
-            self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * 0.01
+            std_init = np.sqrt(2. / self.height / self.width / self.in_channels) # xavier initialization
+            self.W = np.random.randn(self.out_channels, self.in_channels, self.height, self.width) * std_init
         if "b" in layer_info:
             self.b = layer_info["b"]
         else:
